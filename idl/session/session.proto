@@ -1,0 +1,145 @@
+//protoc --go_out=. --go-grpc_out=. session.proto
+syntax = "proto3";
+
+option go_package = "./;session";
+
+package session;
+
+// SessionService 用户会话服务
+service SessionService {
+  // Login 用户登录
+  rpc Login (LoginReq) returns (LoginResp);
+  // GetSessions 获取用户会话列表
+  rpc GetSessions (GetSessionsReq) returns (GetSessionsResp);
+  // KickSession 踢人
+  rpc Kick(KickReq) returns (KickResp);
+}
+
+// DeviceType 设备类型枚举
+enum DeviceType {
+  DEVICE_TYPE_UNKNOWN = 0;  // 未知类型
+  DEVICE_TYPE_MOBILE  = 1;  // 移动端（iOS / Android / Harmony）
+  DEVICE_TYPE_WEB     = 2;  // Web 浏览器
+  DEVICE_TYPE_PC      = 3;  // 桌面端（Windows / Mac）
+  DEVICE_TYPE_PAD     = 4;  // 平板设备（可选）
+  DEVICE_TYPE_BOT     = 5;  // 机器人、第三方接入
+}
+
+// SessionStatus 会话状态枚举
+enum SessionStatus {
+  SESSION_STATUS_UNKNOWN = 0;
+  SESSION_STATUS_ONLINE = 1;
+  SESSION_STATUS_OFFLINE = 2;
+}
+
+
+// Session 用户会话信息
+message Session {
+  // user_id 用户id
+  string user_id = 1;
+  // device_id 设备ID（区分多端）
+  string device_id = 2;
+  // DeviceType 设备类型（枚举）
+  DeviceType device_type = 3;// 设备类型（枚举）
+  // gateway_id 当前连接所在的Gateway节点ID
+  string gateway_id = 4;
+  // conn_id 连接ID（在Gateway中的唯一标识）
+  string conn_id = 5;
+  // remote_addr 客户端IP
+  string remote_addr = 6;
+  // status 会话状态（枚举）
+  SessionStatus status = 7;
+  // login_at 登录时间戳
+  int64  login_at = 8;
+  // last_active_at 最后活跃时间戳
+  int64  last_active_at = 9;
+  // expire_at 过期时间戳
+  int64  expire_at = 10;
+  // meta 扩展信息
+  map<string, string> meta = 11; // 扩展信息
+}
+
+
+// AuthInfo 认证信息
+message AuthInfo {
+  // token 认证令牌
+  string token = 1;
+  // device_id 设备ID（区分多端）
+  string device_id = 2;
+  // device_type 设备类型（枚举）
+  DeviceType device_type = 3;
+  // app_version 应用版本号
+  string app_version = 4;
+  // meta 扩展信息
+  map<string, string> meta = 5;
+}
+
+// LoginReq 登陆请求
+message LoginReq {
+  // payload 认证信息，序列化的 AuthInfo
+  bytes payload = 1;
+  // conn_id 连接ID（在Gateway中的唯一标识）
+  string conn_id = 2;
+  // remote_addr 客户端IP
+  string remote_addr = 3;
+  // gateway_id 当前连接所在的Gateway节点ID
+  string gateway_id = 4;
+}
+
+// LoginResp 登陆响应
+message LoginResp {
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 1;
+  // message 响应消息，通常用于错误描述
+  string message = 2;
+  // data 返回数据
+  LoginData data = 3;
+}
+
+// LoginData 登录响应数据
+message LoginData {
+  // session 用户会话信息
+  Session session = 1;
+}
+
+// GetSessionsReq 获取会话请求
+message GetSessionsReq {
+  // user_id 用户ID
+  string user_id = 1;
+  // device_id 设备ID（可选，若为空则获取该用户所有设备的会话）
+  string device_id = 2;
+}
+
+// GetSessionsResp 获取会话响应
+message GetSessionsResp {
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 1;
+  // message 响应消息，通常用于错误描述
+  string message = 2;
+  // data 返回数据
+  GetSessionsData data = 3;
+}
+
+// GetSessionsData 获取会话响应数据
+message GetSessionsData {
+  // sessions 会话列表
+  repeated Session sessions = 1;
+}
+
+// KickReq 踢人请求
+message KickReq {
+  // user_id 用户ID
+  string user_id = 1;
+  // device_id 设备ID（可选，若为空则踢掉该用户所有设备的会话）
+  string device_id = 2;
+  // reason 踢人原因（可选）
+  string reason = 3;
+}
+
+// KickResp 踢人响应
+message KickResp {
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 1;
+  // message 响应消息，通常用于错误描述
+  string message = 2;
+}

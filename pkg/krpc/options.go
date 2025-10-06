@@ -1,0 +1,87 @@
+package krpc
+
+import (
+	"github.com/wsx864321/kim/pkg/krpc/registry"
+	"google.golang.org/grpc"
+)
+
+type serverOptions struct {
+	serviceName string
+	ip          string
+	port        int
+	weight      int
+	health      bool
+	registry    registry.Registrar
+}
+
+type clientOptions struct {
+	serviceName  string
+	registry     registry.Registrar
+	interceptors []grpc.UnaryClientInterceptor
+}
+
+type ServerOption func(opts *serverOptions)
+
+type ClientOption func(opts *clientOptions)
+
+// WithServiceName set serviceName
+func WithServiceName(serviceName string) ServerOption {
+	return func(opts *serverOptions) {
+		opts.serviceName = serviceName
+	}
+}
+
+// WithIP set ip
+func WithIP(ip string) ServerOption {
+	return func(opts *serverOptions) {
+		opts.ip = ip
+	}
+}
+
+// WithPort set port
+func WithPort(port int) ServerOption {
+	return func(opts *serverOptions) {
+		opts.port = port
+	}
+}
+
+// WithWeight set weight
+func WithWeight(weight int) ServerOption {
+	return func(opts *serverOptions) {
+		opts.weight = weight
+	}
+}
+
+// WithHealth set health
+func WithHealth(health bool) ServerOption {
+	return func(opts *serverOptions) {
+		opts.health = health
+	}
+}
+
+// WithRegistry set registry
+func WithRegistry(registry registry.Registrar) ServerOption {
+	return func(opts *serverOptions) {
+		opts.registry = registry
+	}
+}
+
+// WithClientRegistry set registry
+func WithClientRegistry(registry registry.Registrar) ClientOption {
+	return func(opts *clientOptions) {
+		opts.registry = registry
+	}
+}
+
+// WithClientInterceptors set interceptors
+func WithClientInterceptors(interceptors ...grpc.UnaryClientInterceptor) ClientOption {
+	return func(opts *clientOptions) {
+		opts.interceptors = interceptors
+	}
+}
+
+func WithClientServiceName(serviceName string) ClientOption {
+	return func(opts *clientOptions) {
+		opts.serviceName = serviceName
+	}
+}
