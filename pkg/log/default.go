@@ -2,22 +2,44 @@ package log
 
 import (
 	"context"
+	"sync"
 )
 
-var defaultLogger = NewLogger()
+var (
+	defaultLogger     *Logger
+	defaultLoggerOnce sync.Once
+)
+
+// InitLogger 初始化默认 logger，应该在配置加载后调用
+func InitLogger(opts ...Option) {
+	opts = append(opts, WithCallerSkip(3))
+	defaultLoggerOnce.Do(func() {
+		defaultLogger = NewLogger(opts...)
+	})
+}
+
+// getDefaultLogger 获取默认 logger，如果未初始化则使用默认配置
+func getDefaultLogger() *Logger {
+	if defaultLogger == nil {
+		defaultLoggerOnce.Do(func() {
+			defaultLogger = NewLogger()
+		})
+	}
+	return defaultLogger
+}
 
 func Debug(ctx context.Context, msg string, fields ...Field) {
-	defaultLogger.Debug(ctx, msg, fields...)
+	getDefaultLogger().Debug(ctx, msg, fields...)
 }
 
 func Info(ctx context.Context, msg string, fields ...Field) {
-	defaultLogger.Info(ctx, msg, fields...)
+	getDefaultLogger().Info(ctx, msg, fields...)
 }
 
 func Warn(ctx context.Context, msg string, fields ...Field) {
-	defaultLogger.Warn(ctx, msg, fields...)
+	getDefaultLogger().Warn(ctx, msg, fields...)
 }
 
 func Error(ctx context.Context, msg string, fields ...Field) {
-	defaultLogger.Error(ctx, msg, fields...)
+	getDefaultLogger().Error(ctx, msg, fields...)
 }

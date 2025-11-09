@@ -45,7 +45,7 @@ var (
 var (
 	ErrSessionNotFound       = NewError(ErrSessionNotFoundCode, "session not found")
 	ErrSessionExpired        = NewError(ErrSessionExpiredCode, "session expired")
-	ErrSessionDuplicateLogin = NewError(ErrSessionDuplicateLoginCode, "duplicate login")
+	ErrSessionDuplicateLogin = NewError(ErrSessionDuplicateLoginCode, "duplicate logic")
 	ErrSessionKickOff        = NewError(ErrSessionKickOffCode, "kicked off")
 	ErrSessionBindFailed     = NewError(ErrSessionBindFailedCode, "bind connection failed")
 	ErrSessionTokenInvalid   = NewError(ErrSessionTokenInvalidCode, "invalid token")

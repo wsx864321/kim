@@ -21,9 +21,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SessionService_Login_FullMethodName       = "/session.SessionService/Login"
-	SessionService_GetSessions_FullMethodName = "/session.SessionService/GetSessions"
-	SessionService_Kick_FullMethodName        = "/session.SessionService/Kick"
+	SessionService_Login_FullMethodName             = "/session.SessionService/Login"
+	SessionService_Logout_FullMethodName            = "/session.SessionService/Logout"
+	SessionService_GetSessions_FullMethodName       = "/session.SessionService/GetSessions"
+	SessionService_Kick_FullMethodName              = "/session.SessionService/Kick"
+	SessionService_RefreshSessionTTL_FullMethodName = "/session.SessionService/RefreshSessionTTL"
 )
 
 // SessionServiceClient is the client API for SessionService service.
@@ -34,10 +36,14 @@ const (
 type SessionServiceClient interface {
 	// Login 用户登录
 	Login(ctx context.Context, in *LoginReq, opts ...grpc.CallOption) (*LoginResp, error)
+	// Logout 用户登出
+	Logout(ctx context.Context, in *LoginReq, opts ...grpc.CallOption) (*LoginResp, error)
 	// GetSessions 获取用户会话列表
 	GetSessions(ctx context.Context, in *GetSessionsReq, opts ...grpc.CallOption) (*GetSessionsResp, error)
 	// KickSession 踢人
 	Kick(ctx context.Context, in *KickReq, opts ...grpc.CallOption) (*KickResp, error)
+	// RefreshSessionTTL 刷新会话 TTL
+	RefreshSessionTTL(ctx context.Context, in *RefreshSessionTTLReq, opts ...grpc.CallOption) (*RefreshSessionTTLResp, error)
 }
 
 type sessionServiceClient struct {
@@ -52,6 +58,16 @@ func (c *sessionServiceClient) Login(ctx context.Context, in *LoginReq, opts ...
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(LoginResp)
 	err := c.cc.Invoke(ctx, SessionService_Login_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sessionServiceClient) Logout(ctx context.Context, in *LoginReq, opts ...grpc.CallOption) (*LoginResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LoginResp)
+	err := c.cc.Invoke(ctx, SessionService_Logout_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +94,16 @@ func (c *sessionServiceClient) Kick(ctx context.Context, in *KickReq, opts ...gr
 	return out, nil
 }
 
+func (c *sessionServiceClient) RefreshSessionTTL(ctx context.Context, in *RefreshSessionTTLReq, opts ...grpc.CallOption) (*RefreshSessionTTLResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshSessionTTLResp)
+	err := c.cc.Invoke(ctx, SessionService_RefreshSessionTTL_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SessionServiceServer is the server API for SessionService service.
 // All implementations must embed UnimplementedSessionServiceServer
 // for forward compatibility.
@@ -86,10 +112,14 @@ func (c *sessionServiceClient) Kick(ctx context.Context, in *KickReq, opts ...gr
 type SessionServiceServer interface {
 	// Login 用户登录
 	Login(context.Context, *LoginReq) (*LoginResp, error)
+	// Logout 用户登出
+	Logout(context.Context, *LoginReq) (*LoginResp, error)
 	// GetSessions 获取用户会话列表
 	GetSessions(context.Context, *GetSessionsReq) (*GetSessionsResp, error)
 	// KickSession 踢人
 	Kick(context.Context, *KickReq) (*KickResp, error)
+	// RefreshSessionTTL 刷新会话 TTL
+	RefreshSessionTTL(context.Context, *RefreshSessionTTLReq) (*RefreshSessionTTLResp, error)
 	mustEmbedUnimplementedSessionServiceServer()
 }
 
@@ -103,11 +133,17 @@ type UnimplementedSessionServiceServer struct{}
 func (UnimplementedSessionServiceServer) Login(context.Context, *LoginReq) (*LoginResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
 }
+func (UnimplementedSessionServiceServer) Logout(context.Context, *LoginReq) (*LoginResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Logout not implemented")
+}
 func (UnimplementedSessionServiceServer) GetSessions(context.Context, *GetSessionsReq) (*GetSessionsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSessions not implemented")
 }
 func (UnimplementedSessionServiceServer) Kick(context.Context, *KickReq) (*KickResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Kick not implemented")
+}
+func (UnimplementedSessionServiceServer) RefreshSessionTTL(context.Context, *RefreshSessionTTLReq) (*RefreshSessionTTLResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefreshSessionTTL not implemented")
 }
 func (UnimplementedSessionServiceServer) mustEmbedUnimplementedSessionServiceServer() {}
 func (UnimplementedSessionServiceServer) testEmbeddedByValue()                        {}
@@ -148,6 +184,24 @@ func _SessionService_Login_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SessionService_Logout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LoginReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionServiceServer).Logout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionService_Logout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionServiceServer).Logout(ctx, req.(*LoginReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SessionService_GetSessions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetSessionsReq)
 	if err := dec(in); err != nil {
@@ -184,6 +238,24 @@ func _SessionService_Kick_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SessionService_RefreshSessionTTL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshSessionTTLReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionServiceServer).RefreshSessionTTL(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionService_RefreshSessionTTL_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionServiceServer).RefreshSessionTTL(ctx, req.(*RefreshSessionTTLReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SessionService_ServiceDesc is the grpc.ServiceDesc for SessionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -196,12 +268,20 @@ var SessionService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _SessionService_Login_Handler,
 		},
 		{
+			MethodName: "Logout",
+			Handler:    _SessionService_Logout_Handler,
+		},
+		{
 			MethodName: "GetSessions",
 			Handler:    _SessionService_GetSessions_Handler,
 		},
 		{
 			MethodName: "Kick",
 			Handler:    _SessionService_Kick_Handler,
+		},
+		{
+			MethodName: "RefreshSessionTTL",
+			Handler:    _SessionService_RefreshSessionTTL_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

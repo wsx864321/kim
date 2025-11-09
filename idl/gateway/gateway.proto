@@ -1,0 +1,74 @@
+//protoc --go_out=. --go-grpc_out=. gateway.proto
+syntax = "proto3";
+
+option go_package = "./;gateway";
+
+package gateway;
+
+// GatewayService 网关服务
+service GatewayService {
+  // PushMsg 推送消息
+  rpc PushMsg (PushReq) returns (PushResp);
+  // BatchPushMsg 批量推送消息
+  rpc BatchPushMsg (BatchPushReq) returns (BatchPushResp);
+  // CloseConn 取消连接
+  rpc CloseConn (CloseConnReq) returns (CloseConnResp);
+}
+
+// PushReq 推送消息请求
+message PushReq {
+  // conn_id 连接ID
+  string conn_id = 1;
+  // msg 消息内容
+  bytes msg = 2;
+}
+
+// PushResp 推送消息响应
+message PushResp {
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 1;
+  // message 响应消息，通常用于错误描述
+  string message = 2;
+}
+
+// BatchPushReq 批量推送消息请求
+message BatchPushReq {
+  // targets 推送目标列表
+  repeated string targets = 1;
+  // msg 消息内容
+  bytes msg = 2;
+}
+
+// BatchPushResp 批量推送消息响应
+message BatchPushResp {
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 1;
+  // message 响应消息，通常用于错误描述
+  string message = 2;
+  // results 推送结果列表
+  repeated PushResult results = 3;
+}
+
+// PushResult 推送结果
+message PushResult {
+  // target 推送目标连接ID
+  string target = 1;
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 2;
+  // message 响应消息，通常用于错误描述
+  string message = 3;
+}
+
+// CloseConnReq 取消连接请求
+message CloseConnReq {
+  // conn_id 连接ID
+  string conn_id = 1;
+}
+
+// CloseConnResp 取消连接响应
+message CloseConnResp {
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 1;
+  // message 响应消息，通常用于错误描述
+  string message = 2;
+}

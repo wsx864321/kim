@@ -1,0 +1,88 @@
+//protoc --go_out=. --go-grpc_out=. push.proto
+syntax = "proto3";
+
+option go_package = "./;push";
+
+package push;
+
+// PushService 消息推送服务
+service PushService {
+  // PushMsg 推送消息
+  rpc PushMsg (PushReq) returns (PushResp);
+  // BatchPushMsg 批量推送消息
+  rpc BatchPushMsg (BatchPushReq) returns (BatchPushResp);
+  // CloseConn 取消连接
+  rpc CloseConn (CloseConnReq) returns (CloseConnResp);
+}
+
+// PushReq 推送消息请求
+message PushReq {
+  // user_id 用户ID
+  string user_id = 1;
+  // device_id 设备ID（可选，指定设备推送）
+  string device_id = 2;
+  // msg 消息内容
+  bytes msg = 3;
+}
+
+// PushResp 推送消息响应
+message PushResp {
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 1;
+  // message 响应消息，通常用于错误描述
+  string message = 2;
+}
+
+// BatchPushReq 批量推送消息请求
+message BatchPushReq {
+  // targets 推送目标列表
+  repeated PushTarget targets = 1;
+  // msg 消息内容
+  string msg = 2;
+}
+
+// PushTarget 推送目标
+message PushTarget {
+  // user_id 用户ID
+  string user_id = 1;
+  // device_id 设备ID（可选，指定设备推送）
+  string device_id = 2;
+}
+
+// BatchPushResp 批量推送消息响应
+message BatchPushResp {
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 1;
+  // message 响应消息，通常用于错误描述
+  string message = 2;
+  // results 推送结果列表
+  repeated PushResult results = 3;
+}
+
+// PushResult 推送结果
+message PushResult {
+  // user_id 用户ID
+  string user_id = 1;
+  // device_id 设备ID（可选，指定设备推送）
+  string device_id = 2;
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 3;
+  // message 响应消息，通常用于错误描述
+  string message = 4;
+}
+
+// CloseConnReq 取消连接请求
+message CloseConnReq {
+  // user_id 用户ID
+  string user_id = 1;
+  // conn_id 连接ID
+  uint64 conn_id = 2;
+}
+
+// CloseConnResp 取消连接响应
+message CloseConnResp {
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 1;
+  // message 响应消息，通常用于错误描述
+  string message = 2;
+}

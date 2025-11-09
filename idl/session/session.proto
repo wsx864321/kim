@@ -9,10 +9,14 @@ package session;
 service SessionService {
   // Login 用户登录
   rpc Login (LoginReq) returns (LoginResp);
+  // Logout 用户登出
+  rpc Logout (LoginReq) returns (LoginResp);
   // GetSessions 获取用户会话列表
   rpc GetSessions (GetSessionsReq) returns (GetSessionsResp);
   // KickSession 踢人
   rpc Kick(KickReq) returns (KickResp);
+  // RefreshSessionTTL 刷新会话 TTL
+  rpc RefreshSessionTTL (RefreshSessionTTLReq) returns (RefreshSessionTTLResp);
 }
 
 // DeviceType 设备类型枚举
@@ -44,7 +48,7 @@ message Session {
   // gateway_id 当前连接所在的Gateway节点ID
   string gateway_id = 4;
   // conn_id 连接ID（在Gateway中的唯一标识）
-  string conn_id = 5;
+  uint64 conn_id = 5;
   // remote_addr 客户端IP
   string remote_addr = 6;
   // status 会话状态（枚举）
@@ -79,7 +83,7 @@ message LoginReq {
   // payload 认证信息，序列化的 AuthInfo
   bytes payload = 1;
   // conn_id 连接ID（在Gateway中的唯一标识）
-  string conn_id = 2;
+  uint64 conn_id = 2;
   // remote_addr 客户端IP
   string remote_addr = 3;
   // gateway_id 当前连接所在的Gateway节点ID
@@ -100,6 +104,22 @@ message LoginResp {
 message LoginData {
   // session 用户会话信息
   Session session = 1;
+}
+
+// LogoutReq 登出请求
+message LogoutReq {
+  // user_id 用户ID
+  string user_id = 1;
+  // device_id 设备ID（可选，若为空则登出该用户所有设备的会话）
+  string device_id = 2;
+}
+
+// LogoutResp 登出响应
+message LogoutResp {
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 1;
+  // message 响应消息，通常用于错误描述
+  string message = 2;
 }
 
 // GetSessionsReq 获取会话请求
@@ -138,6 +158,24 @@ message KickReq {
 
 // KickResp 踢人响应
 message KickResp {
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 1;
+  // message 响应消息，通常用于错误描述
+  string message = 2;
+}
+
+// RefreshSessionTTLReq 刷新会话 TTL 请求
+message RefreshSessionTTLReq {
+  // user_id 用户ID
+  string user_id = 1;
+  // device_id 设备ID
+  string device_id = 2;
+  // last_active_at 最后活跃时间戳
+  int64 last_active_at = 3;
+}
+
+// RefreshSessionTTLResp 刷新会话 TTL 响应
+message RefreshSessionTTLResp {
   // code 响应码，0表示成功，非0表示失败
   int32 code = 1;
   // message 响应消息，通常用于错误描述

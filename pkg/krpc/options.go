@@ -10,7 +10,6 @@ type serverOptions struct {
 	ip          string
 	port        int
 	weight      int
-	health      bool
 	registry    registry.Registrar
 }
 
@@ -49,13 +48,6 @@ func WithPort(port int) ServerOption {
 func WithWeight(weight int) ServerOption {
 	return func(opts *serverOptions) {
 		opts.weight = weight
-	}
-}
-
-// WithHealth set health
-func WithHealth(health bool) ServerOption {
-	return func(opts *serverOptions) {
-		opts.health = health
 	}
 }
 

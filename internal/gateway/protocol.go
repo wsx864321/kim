@@ -75,7 +75,7 @@ func EncodePacket(p Packet) ([]byte, error) {
 func DecodePacket(conn net.Conn) (*Packet, error) {
 	header := make([]byte, HeaderSize)
 	if _, err := io.ReadFull(conn, header); err != nil {
-		return nil, fmt.Errorf("read header error: %w", err)
+		return nil, err
 	}
 
 	// 验证 Magic Number

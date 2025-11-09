@@ -25,19 +25,32 @@ func NewLogger(opts ...Option) *Logger {
 		Options: opt,
 	}
 
-	fileWriteSyncer := log.getFileLogWriter()
 	var core zapcore.Core
-	encoderConfig := zap.NewProductionEncoderConfig()
-	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	encoder := zapcore.NewJSONEncoder(encoderConfig)
-	if opt.debug {
+	if opt.debug { // Debug 模式：控制台使用带颜色的编码器
+		consoleEncoder := zapcore.NewConsoleEncoder(
+			zapcore.EncoderConfig{
+				TimeKey:       "T",
+				LevelKey:      "L",
+				NameKey:       "N",
+				CallerKey:     "C",
+				MessageKey:    "M",
+				StacktraceKey: "S",
+				LineEnding:    zapcore.DefaultLineEnding,
+				EncodeLevel:   zapcore.LevelEncoder(func(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) { enc.AppendString(levelColor(l)) }),
+				EncodeTime:    zapcore.ISO8601TimeEncoder,
+				EncodeCaller:  zapcore.ShortCallerEncoder,
+			})
 		core = zapcore.NewTee(
-			zapcore.NewCore(encoder, zapcore.AddSync(os.Stdout), zapcore.DebugLevel),
-			zapcore.NewCore(encoder, fileWriteSyncer, zapcore.DebugLevel),
+			zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), zapcore.DebugLevel),
 		)
-	} else {
+	} else { // 非 Debug 模式：只输出到文件，使用 InfoLevel
+		// 文件输出使用 JSON 格式
+		fileEncoderConfig := zap.NewProductionEncoderConfig()
+		fileEncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+		fileEncoder := zapcore.NewJSONEncoder(fileEncoderConfig)
+		fileWriteSyncer := log.getFileLogWriter()
 		core = zapcore.NewTee(
-			zapcore.NewCore(encoder, fileWriteSyncer, zapcore.InfoLevel),
+			zapcore.NewCore(fileEncoder, fileWriteSyncer, zapcore.InfoLevel),
 		)
 	}
 	log.logger = zap.New(core, zap.WithCaller(true), zap.AddCallerSkip(log.callerSkip))
@@ -84,4 +97,22 @@ func (l *Logger) Log(ctx context.Context, level Level, msg string, fields ...Fie
 		fields = append([]Field{String(keyTraceID, traceID)}, fields...)
 	}
 	l.logger.Log(level, msg, fields...)
+}
+
+// levelColor 返回带颜色的日志级别字符串
+func levelColor(l zapcore.Level) string {
+	switch l {
+	case zapcore.DebugLevel:
+		return "\033[36mDEBUG\033[0m" // 青色
+	case zapcore.InfoLevel:
+		return "\033[32mINFO\033[0m" // 绿色
+	case zapcore.WarnLevel:
+		return "\033[33mWARN\033[0m" // 黄色
+	case zapcore.ErrorLevel:
+		return "\033[31mERROR\033[0m" // 红色
+	case zapcore.DPanicLevel, zapcore.PanicLevel, zapcore.FatalLevel:
+		return "\033[35mFATAL\033[0m" // 紫色
+	default:
+		return l.String()
+	}
 }

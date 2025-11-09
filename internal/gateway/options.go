@@ -33,3 +33,20 @@ func WithSessionClient(client SessionServiceClient) TCPOption {
 		o.sessionClient = client
 	}
 }
+
+// WithRefreshTTLInterval 设置刷新Session TTL的间隔时间
+func WithRefreshTTLInterval(d time.Duration) TCPOption {
+	return func(o *TCPTransport) {
+		o.refreshTTLInterval = d
+		// 如果时间轮已创建，需要重新创建
+		if o.timeWheel != nil {
+			o.timeWheel.stop()
+		}
+		// 重新创建时间轮
+		slots := int(d.Seconds())
+		if slots <= 0 {
+			slots = 60 // 默认60个槽
+		}
+		o.timeWheel = newTimeWheel(d, slots)
+	}
+}

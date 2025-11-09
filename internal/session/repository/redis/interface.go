@@ -16,4 +16,6 @@ type InstanceInterface interface {
 	DeleteSession(ctx context.Context, userID, deviceID string) error
 	// DeleteSessionsByUserID 删除用户所有会话
 	DeleteSessionsByUserID(ctx context.Context, userID string) error
+	// RefreshSessionTTL 刷新Session TTL（使用Lua脚本保证原子性）
+	RefreshSessionTTL(ctx context.Context, userID, deviceID string, lastActiveAt int64) error
 }

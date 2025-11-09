@@ -5,36 +5,36 @@ import (
 	"errors"
 	"net"
 	"runtime"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	sessionpb "github.com/wsx864321/kim/idl/session"
 	"github.com/wsx864321/kim/pkg/log"
-	"github.com/wsx864321/kim/pkg/xerr"
 	"google.golang.org/grpc"
 )
 
 // SessionServiceClient Session 服务客户端接口
 type SessionServiceClient interface {
-	Login(ctx context.Context, in *sessionpb.LoginReq, opts ...grpc.CallOption) (*sessionpb.LoginResp, error)
+	RefreshSessionTTL(ctx context.Context, in *sessionpb.RefreshSessionTTLReq, opts ...grpc.CallOption) (*sessionpb.RefreshSessionTTLResp, error)
 }
 
 type TCPTransport struct {
-	port             int
-	ln               *net.TCPListener
-	ep               *epoll
-	connPool         *connPool
-	handler          EventHandler
-	ctx              context.Context
-	cancel           context.CancelFunc
-	wg               sync.WaitGroup
-	stopped          int32
-	heartbeatTimeout time.Duration
-	numWorkers       int
-	gatewayID        string               // Gateway 节点ID
-	sessionClient    SessionServiceClient // Session 服务客户端
+	port               int
+	ln                 *net.TCPListener
+	ep                 *epoll
+	connPool           *connPool
+	handler            EventHandler
+	ctx                context.Context
+	cancel             context.CancelFunc
+	wg                 sync.WaitGroup
+	stopped            int32
+	heartbeatTimeout   time.Duration
+	numWorkers         int
+	gatewayID          string               // Gateway 节点ID
+	sessionClient      SessionServiceClient // Session 服务客户端
+	timeWheel          *timeWheel           // 时间轮定时器
+	refreshTTLInterval time.Duration        // 刷新TTL的间隔（默认60s）
 }
 
 // NewTCPTransport 创建 TCP Transport
@@ -51,20 +51,28 @@ func NewTCPTransport(port int, opts ...TCPOption) (*TCPTransport, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t := &TCPTransport{
-		port:             port,
-		ln:               ln,
-		ep:               ep,
-		connPool:         newConnPool(),
-		ctx:              ctx,
-		cancel:           cancel,
-		heartbeatTimeout: 180 * time.Second,
-		numWorkers:       2 * runtime.NumCPU(),
-		gatewayID:        "default", // 默认 Gateway ID
+		port:               port,
+		ln:                 ln,
+		ep:                 ep,
+		connPool:           newConnPool(),
+		ctx:                ctx,
+		cancel:             cancel,
+		heartbeatTimeout:   180 * time.Second,
+		numWorkers:         2 * runtime.NumCPU(),
+		gatewayID:          "default",        // 默认 Gateway ID
+		refreshTTLInterval: 60 * time.Second, // 默认60秒刷新一次TTL
 	}
 
 	for _, opt := range opts {
 		opt(t)
 	}
+
+	// 初始化时间轮（槽数等于间隔秒数，每1秒转动一次）
+	slots := int(t.refreshTTLInterval.Seconds())
+	if slots <= 0 {
+		slots = 60 // 默认60个槽
+	}
+	t.timeWheel = newTimeWheel(t.refreshTTLInterval, slots)
 
 	return t, nil
 }
@@ -87,6 +95,11 @@ func (t *TCPTransport) Start() error {
 	t.wg.Add(1)
 	go t.heartbeatLoop()
 
+	// 启动时间轮定时器
+	if t.timeWheel != nil && t.sessionClient != nil {
+		t.timeWheel.start(t.refreshSessionTTL)
+	}
+
 	return nil
 }
 
@@ -98,6 +111,11 @@ func (t *TCPTransport) Stop() error {
 
 	t.cancel()
 	t.ln.Close()
+
+	// 停止时间轮
+	if t.timeWheel != nil {
+		t.timeWheel.stop()
+	}
 
 	// 关闭所有连接
 	conns := t.connPool.getAll()
@@ -151,67 +169,28 @@ func (t *TCPTransport) acceptLoop() {
 
 // handleNewConnection 处理新连接（在独立协程中，避免阻塞 accept）
 func (t *TCPTransport) handleNewConnection(conn net.Conn) {
+	ctx := context.Background()
 	// 设置初始读取超时（用于读取登录包）
 	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 
 	// 读取并验证登录包
 	packet, err := DecodePacket(conn)
 	if err != nil {
-		log.Warn(context.Background(), "decode login packet failed", log.String("error", err.Error()), log.String("remote", conn.RemoteAddr().String()))
+		log.Warn(ctx, "decode logic packet failed", log.String("error", err.Error()), log.String("remote", conn.RemoteAddr().String()))
 		conn.Close()
 		return
 	}
 
 	if packet.MsgType != MsgTypeLogin {
-		log.Warn(context.Background(), "first packet must be login", log.Any("msgType", packet.MsgType))
+		log.Warn(ctx, "first packet must be logic", log.Any("msgType", packet.MsgType))
 		conn.Close()
 		return
 	}
-
-	// 生成临时连接ID（用于 Login 请求）
-	tempConnID := connIDGenerator.NextID()
-
-	// 调用 Session.Login
-	// packet.Body 应该是客户端发送的序列化后的 AuthInfo
-	loginReq := &sessionpb.LoginReq{
-		Payload:    packet.Body, // 直接使用 packet.Body（已序列化的 AuthInfo）
-		ConnId:     strconv.FormatUint(tempConnID, 10),
-		RemoteAddr: conn.RemoteAddr().String(),
-		GatewayId:  t.gatewayID,
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	loginResp, err := t.sessionClient.Login(ctx, loginReq)
+	session, err := t.handler.OnLogin(ctx, conn, packet.Body, t.gatewayID)
 	if err != nil {
-		log.Warn(ctx, "call session login failed", log.String("error", err.Error()), log.String("remote", conn.RemoteAddr().String()))
+		log.Warn(ctx, "logic failed", log.String("error", err.Error()), log.String("remote", conn.RemoteAddr().String()))
 		conn.Close()
 		return
-	}
-
-	// 检查登录结果
-	if loginResp.Code != xerr.OK.Code() {
-		log.Warn(ctx, "session login failed", log.Int("code", int(loginResp.Code)), log.String("message", loginResp.Message), log.String("remote", conn.RemoteAddr().String()))
-		conn.Close()
-		return
-	}
-
-	// 3. 登录成功，从响应中获取会话信息
-	session := loginResp.GetData().GetSession()
-	if session == nil {
-		log.Error(ctx, "session data is nil in login response")
-		conn.Close()
-		return
-	}
-
-	// 解析连接ID（从 session 中获取，或使用临时ID）
-	connID := tempConnID
-	if session.ConnId != "" {
-		parsedID, err := strconv.ParseUint(session.ConnId, 10, 64)
-		if err == nil {
-			connID = parsedID
-		}
 	}
 
 	// 解析平台类型
@@ -231,10 +210,10 @@ func (t *TCPTransport) handleNewConnection(conn net.Conn) {
 		platformType = PlatformTypeUnknown
 	}
 
-	// 4. 创建连接对象
+	// 创建连接对象
 	expireTime := time.Unix(session.ExpireAt, 0)
 	c := &connection{
-		id:           connID,
+		id:           session.GetConnId(),
 		userID:       session.GetUserId(),
 		platformType: platformType,
 		deviceID:     session.GetDeviceId(),
@@ -243,10 +222,10 @@ func (t *TCPTransport) handleNewConnection(conn net.Conn) {
 		lastActiveAt: time.Now(),
 	}
 
-	// 5. 添加到连接池
+	//  添加到连接池
 	t.connPool.add(c)
 
-	// 6. 添加到 epoll
+	//  添加到 epoll
 	if err := t.ep.add(c); err != nil {
 		log.Error(ctx, "add to epoll failed", log.String("error", err.Error()))
 		t.connPool.remove(c)
@@ -254,9 +233,14 @@ func (t *TCPTransport) handleNewConnection(conn net.Conn) {
 		return
 	}
 
-	// 7. 通知上层连接建立
+	// 添加到时间轮，用于定期刷新Session TTL
+	if t.timeWheel != nil {
+		t.timeWheel.add(c)
+	}
+
+	// 通知上层连接建立
 	if t.handler != nil {
-		if err := t.handler.OnConnect(c); err != nil {
+		if err := t.handler.OnConnect(ctx, c); err != nil {
 			log.Warn(ctx, "onConnect handler failed", log.String("error", err.Error()))
 		}
 	}
@@ -300,13 +284,9 @@ func (t *TCPTransport) handleConnectionRead(ctx context.Context, conn *connectio
 
 	// 读取数据包（不设置超时，使用默认的）
 	packet, err := DecodePacket(conn.conn)
-	if err != nil {
-		// 读取失败，可能是连接关闭或超时
-		if errors.Is(err, net.ErrClosed) {
-			return
-		}
+	if err != nil { // 不管是什么原因的错误，都断开连接（读取超时、数据错误、连接关闭等等）
 		log.Debug(context.Background(), "read packet failed", log.String("error", err.Error()), log.Uint64("connID", conn.id))
-		t.handleDisconnect(conn, "read error")
+		t.handleDisconnect(ctx, conn, err.Error())
 		return
 	}
 
@@ -314,15 +294,15 @@ func (t *TCPTransport) handleConnectionRead(ctx context.Context, conn *connectio
 	switch packet.MsgType {
 	case MsgTypePing:
 		// 心跳包，回复 Pong
-		t.sendPong(conn)
+		t.sendPong(ctx, conn)
 	case MsgTypeLogout:
 		// 登出
-		t.handleDisconnect(conn, "logout")
+		t.handleDisconnect(ctx, conn, "logout")
 	case MsgTypeUpstream:
 		// 上行消息（客户端→服务端），通知上层处理
 		if t.handler != nil {
-			if err := t.handler.OnMessage(conn, packet.Body); err != nil {
-				log.Warn(context.Background(), "onMessage handler failed", log.String("error", err.Error()), log.Uint64("connID", conn))
+			if err := t.handler.OnMessage(ctx, conn, packet.Body); err != nil {
+				log.Warn(context.Background(), "onMessage handler failed", log.String("error", err.Error()), log.Uint64("connID", conn.id))
 			}
 		}
 	default:
@@ -331,7 +311,7 @@ func (t *TCPTransport) handleConnectionRead(ctx context.Context, conn *connectio
 }
 
 // sendPong 发送心跳响应
-func (t *TCPTransport) sendPong(conn *connection) {
+func (t *TCPTransport) sendPong(ctx context.Context, conn *connection) {
 	pongPacket := Packet{
 		MsgType: MsgTypePong,
 		Body:    nil,
@@ -348,12 +328,17 @@ func (t *TCPTransport) sendPong(conn *connection) {
 
 	// 通知上层收到心跳
 	if t.handler != nil {
-		t.handler.OnHeartbeat(conn)
+		t.handler.OnHeartbeat(ctx, conn)
 	}
 }
 
 // handleDisconnect 处理连接断开
-func (t *TCPTransport) handleDisconnect(conn *connection, reason string) {
+func (t *TCPTransport) handleDisconnect(ctx context.Context, conn *connection, reason string) {
+	// 从时间轮移除
+	if t.timeWheel != nil {
+		t.timeWheel.remove(conn.id)
+	}
+
 	// 从 epoll 移除
 	t.ep.remove(conn)
 
@@ -365,11 +350,11 @@ func (t *TCPTransport) handleDisconnect(conn *connection, reason string) {
 
 	// 通知上层
 	if t.handler != nil {
-		t.handler.OnDisconnect(conn, reason)
+		t.handler.OnDisconnect(ctx, conn, reason)
 	}
 
 	log.Info(
-		context.Background(),
+		ctx,
 		"connection closed",
 		log.Uint64("connID", conn.id),
 		log.String("userID", conn.userID),
@@ -392,16 +377,19 @@ func (t *TCPTransport) heartbeatLoop() {
 			now := time.Now()
 			conns := t.connPool.getAll()
 
+			ctx := context.Background()
+			log.Info(ctx, "heartbeat check", log.Int("connections", len(conns)))
 			for _, conn := range conns {
 				lastActive := conn.getLastActiveTime()
 				if now.Sub(lastActive) > t.heartbeatTimeout {
 					// 心跳超时
 					if t.handler != nil {
-						t.handler.OnHeartbeatTimeout(conn)
+						t.handler.OnHeartbeatTimeout(ctx, conn)
 					}
-					t.handleDisconnect(conn, "heartbeat timeout")
+					t.handleDisconnect(ctx, conn, "heartbeat timeout")
 				}
 			}
+			log.Info(ctx, "heartbeat check completed")
 		}
 	}
 }
@@ -412,7 +400,7 @@ func (t *TCPTransport) SetHandler(h EventHandler) {
 }
 
 // Send 发送消息到指定连接
-func (t *TCPTransport) Send(connID int, data []byte) error {
+func (t *TCPTransport) Send(ctx context.Context, connID int, data []byte) error {
 	conn, ok := t.connPool.getByID(connID)
 	if !ok {
 		return errors.New("connection not found")
@@ -429,7 +417,7 @@ func (t *TCPTransport) Send(connID int, data []byte) error {
 	}
 
 	if _, err := conn.conn.Write(encoded); err != nil {
-		log.Warn(context.Background(), "send message failed", log.String("error", err.Error()), log.Uint64("connID", uint64(connID)))
+		log.Warn(ctx, "send message failed", log.String("error", err.Error()), log.Uint64("connID", uint64(connID)))
 		return err
 	}
 
@@ -437,9 +425,9 @@ func (t *TCPTransport) Send(connID int, data []byte) error {
 }
 
 // BatchSend 批量发送消息到多个连接（发送相同消息）
-func (t *TCPTransport) BatchSend(connIDs []int, data []byte) error {
+func (t *TCPTransport) BatchSend(ctx context.Context, connIDs []int, data []byte) ([]uint64, error) {
 	if len(connIDs) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// 编码数据包（所有连接使用相同消息）
@@ -450,40 +438,79 @@ func (t *TCPTransport) BatchSend(connIDs []int, data []byte) error {
 
 	encoded, err := EncodePacket(packet)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// 批量发送
-	var firstErr error
+	failConns := make([]uint64, 0)
 	for _, connID := range connIDs {
 		conn, ok := t.connPool.getByID(connID)
 		if !ok {
-			if firstErr == nil {
-				firstErr = errors.New("connection not found")
-			}
+			log.Warn(ctx, "connection not found", log.Uint64("connID", uint64(connID)))
+			failConns = append(failConns, uint64(connID))
 			continue
 		}
 
 		if _, err := conn.conn.Write(encoded); err != nil {
-			log.Warn(context.Background(), "send batch message failed", log.String("error", err.Error()), log.Uint64("connID", uint64(connID)))
-			if firstErr == nil {
-				firstErr = err
-			}
-			// 继续发送其他连接，不中断
+			log.Warn(ctx, "send batch message failed", log.String("error", err.Error()), log.Uint64("connID", uint64(connID)))
+			failConns = append(failConns, uint64(connID))
 		}
 	}
 
-	return firstErr // 返回第一个错误（如果有）
+	return failConns, nil
 }
 
 // CloseConn 关闭指定连接
-func (t *TCPTransport) CloseConn(connID int) error {
+func (t *TCPTransport) CloseConn(ctx context.Context, connID int) error {
 	conn, ok := t.connPool.getByID(connID)
 	if !ok {
 		return errors.New("connection not found")
 	}
 
 	// 使用 handleDisconnect 确保完整清理
-	t.handleDisconnect(conn, "closed by server")
+	t.handleDisconnect(ctx, conn, "closed by server")
 	return nil
+}
+
+// refreshSessionTTL 刷新Session TTL的回调函数
+func (t *TCPTransport) refreshSessionTTL(conns []*connection) {
+	if t.sessionClient == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
+	defer cancel()
+
+	for _, conn := range conns {
+		if ctx.Err() != nil { // 上下文已超时或取消，停止处理
+			log.Warn(ctx, "refresh session timeout")
+			return
+		}
+		// 检查连接是否仍然有效
+		if _, ok := t.connPool.getByID(int(conn.id)); !ok {
+			// 连接已断开，跳过
+			continue
+		}
+
+		// 获取最后活跃时间
+		lastActiveAt := conn.getLastActiveTime().Unix()
+
+		err := t.handler.OnRefreshSession(ctx, conn, lastActiveAt)
+		if err != nil {
+			// 刷新失败，需要关闭连接
+			t.handleDisconnect(ctx, conn, "refresh session timeout")
+			continue
+		}
+		// 刷新成功，将连接重新添加到时间轮，以便下次继续刷新
+		if t.timeWheel != nil {
+			t.timeWheel.add(conn)
+		}
+
+		log.Debug(
+			ctx,
+			"session TTL refreshed",
+			log.Uint64("connID", conn.id),
+			log.String("userID", conn.userID),
+		)
+	}
 }

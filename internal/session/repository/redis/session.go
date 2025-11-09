@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/redis/go-redis/v9"
 	sessionpb "github.com/wsx864321/kim/idl/session"
 	"github.com/wsx864321/kim/pkg/log"
-	"time"
 )
 
 var (
@@ -23,7 +24,7 @@ const (
 	userSessionsSetKey = "kim:user:sessions:{%s}"
 
 	// sessionExpire 会话过期时间，7 天
-	sessionExpire = 7 * 24 * time.Hour
+	sessionExpire = 200 * time.Second
 )
 
 // StoreSession 存储Session
@@ -147,6 +148,30 @@ func (i *Instance) DeleteSessionsByUserID(ctx context.Context, userID string) er
 	// 删除集合
 	if err := i.redis.Del(ctx, setKey).Err(); err != nil {
 		return fmt.Errorf("delete sessions set failed: %w", err)
+	}
+
+	return nil
+}
+
+// RefreshSessionTTL 刷新Session TTL（使用Lua脚本保证原子性）
+func (i *Instance) RefreshSessionTTL(ctx context.Context, userID, deviceID string, lastActiveAt int64) error {
+	sessionKey := buildUserSessionKey(userID, deviceID)
+	expireSeconds := int64(sessionExpire.Seconds())
+
+	// 使用Lua脚本保证原子性操作
+	// 参数需要转换为字符串
+	result, err := i.refreshSessionTTLLuaScript.Run(ctx, i.redis, []string{sessionKey}, fmt.Sprintf("%d", lastActiveAt), fmt.Sprintf("%d", expireSeconds)).Result()
+	if err != nil {
+		return fmt.Errorf("refresh session TTL failed: %w", err)
+	}
+
+	// 检查结果（1表示成功，0表示session不存在，-1表示JSON解析失败）
+	resultInt := result.(int64)
+	if resultInt == 0 {
+		return ErrSessionNotFound
+	}
+	if resultInt == -1 {
+		return fmt.Errorf("failed to parse session JSON")
 	}
 
 	return nil

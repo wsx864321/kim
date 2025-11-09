@@ -23,7 +23,9 @@ type KServer struct {
 }
 
 func NewPServer(opts ...ServerOption) *KServer {
-	opt := serverOptions{}
+	opt := serverOptions{
+		weight: 100, // default weight 100
+	}
 	for _, o := range opts {
 		o(&opt)
 	}
@@ -52,19 +54,6 @@ func (p *KServer) RegisterUnaryServerInterceptor(i grpc.UnaryServerInterceptor) 
 
 // Start 开启server
 func (p *KServer) Start(ctx context.Context) {
-	service := registry.Service{
-		Name: p.serviceName,
-		Endpoints: []*registry.Endpoint{
-			{
-				ServerName: p.serviceName,
-				IP:         p.ip,
-				Port:       p.port,
-				Weight:     p.weight,
-				Enable:     true,
-			},
-		},
-	}
-
 	// 加载中间件
 	interceptors := []grpc.UnaryServerInterceptor{
 		serverinterceptor.RecoveryUnaryServerInterceptor(),
@@ -90,10 +79,26 @@ func (p *KServer) Start(ctx context.Context) {
 			panic(err)
 		}
 	}()
-	// 服务注册
-	p.registry.Register(ctx, &service)
 
-	log.Info(context.Background(), "start PRCP success")
+	// 服务注册
+	service := registry.Service{
+		Name: p.serviceName,
+		Endpoints: []*registry.Endpoint{
+			{
+				ServerName: p.serviceName,
+				IP:         p.ip,
+				Port:       p.port,
+				Weight:     p.weight,
+				Enable:     true,
+			},
+		},
+	}
+	if p.registry != nil {
+		p.registry.Register(ctx, &service)
+		log.Info(context.Background(), "register service success", log.Any("service", service))
+	}
+
+	log.Info(context.Background(), "start PRCP success", log.Any("service", p.serviceName))
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT)
@@ -102,7 +107,9 @@ func (p *KServer) Start(ctx context.Context) {
 		switch sig {
 		case syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT:
 			s.Stop()
-			p.registry.UnRegister(ctx, &service)
+			if p.registry != nil {
+				p.registry.UnRegister(ctx, &service)
+			}
 			time.Sleep(time.Second)
 			return
 		case syscall.SIGHUP:

@@ -1,4 +1,4 @@
-package session
+package logic
 
 import (
 	"context"
@@ -12,18 +12,19 @@ import (
 	"time"
 )
 
-type Service struct {
-	sessionpb.UnimplementedSessionServiceServer
-
+type SessionService struct {
 	redis redis.InstanceInterface
 }
 
-func NewService(redis redis.InstanceInterface) *Service {
-	return &Service{redis: redis}
+// NewSessionService 创建 SessionService 实例
+func NewSessionService(r redis.InstanceInterface) *SessionService {
+	return &SessionService{
+		redis: r,
+	}
 }
 
 // Login 用户登录，创建会话
-func (s *Service) Login(ctx context.Context, req *sessionpb.LoginReq) (*sessionpb.LoginResp, error) {
+func (s *SessionService) Login(ctx context.Context, req *sessionpb.LoginReq) (*sessionpb.LoginResp, error) {
 	var auth sessionpb.AuthInfo
 	if err := proto.Unmarshal(req.Payload, &auth); err != nil {
 		log.Warn(ctx, "unmarshal auth info failed", log.String("err", err.Error()))
@@ -85,15 +86,7 @@ func (s *Service) Login(ctx context.Context, req *sessionpb.LoginReq) (*sessionp
 }
 
 // GetSessions 获取用户会话列表
-func (s *Service) GetSessions(ctx context.Context, req *sessionpb.GetSessionsReq) (*sessionpb.GetSessionsResp, error) {
-	if req.UserId == "" {
-		log.Warn(ctx, "user_id is required")
-		return &sessionpb.GetSessionsResp{
-			Code:    xerr.ErrInvalidParams.Code(),
-			Message: xerr.ErrInvalidParams.Error(),
-		}, nil
-	}
-
+func (s *SessionService) GetSessions(ctx context.Context, req *sessionpb.GetSessionsReq) (*sessionpb.GetSessionsResp, error) {
 	var sessions []*sessionpb.Session
 	var err error
 
@@ -146,15 +139,7 @@ func (s *Service) GetSessions(ctx context.Context, req *sessionpb.GetSessionsReq
 }
 
 // Kick 踢掉用户会话
-func (s *Service) Kick(ctx context.Context, req *sessionpb.KickReq) (*sessionpb.KickResp, error) {
-	if req.UserId == "" {
-		log.Warn(ctx, "user_id is required")
-		return &sessionpb.KickResp{
-			Code:    xerr.ErrInvalidParams.Code(),
-			Message: xerr.ErrInvalidParams.Error(),
-		}, nil
-	}
-
+func (s *SessionService) Kick(ctx context.Context, req *sessionpb.KickReq) (*sessionpb.KickResp, error) {
 	var err error
 	if req.DeviceId != "" {
 		// 踢掉指定设备的会话
@@ -208,6 +193,45 @@ func (s *Service) Kick(ctx context.Context, req *sessionpb.KickReq) (*sessionpb.
 	// 可以通过消息队列或者直接调用 Gateway 服务
 
 	return &sessionpb.KickResp{
+		Code:    xerr.OK.Code(),
+		Message: xerr.OK.Error(),
+	}, nil
+}
+
+// RefreshSessionTTL 刷新Session TTL
+func (s *SessionService) RefreshSessionTTL(ctx context.Context, req *sessionpb.RefreshSessionTTLReq) (*sessionpb.RefreshSessionTTLResp, error) {
+	// 使用Lua脚本刷新Session TTL（保证原子性）
+	err := s.redis.RefreshSessionTTL(ctx, req.UserId, req.DeviceId, req.LastActiveAt)
+	if err != nil {
+		if errors.Is(err, redis.ErrSessionNotFound) {
+			log.Warn(ctx, "session not found",
+				log.String("user_id", req.UserId),
+				log.String("device_id", req.DeviceId),
+			)
+			return &sessionpb.RefreshSessionTTLResp{
+				Code:    xerr.ErrNotFound.Code(),
+				Message: xerr.ErrNotFound.Error(),
+			}, nil
+		}
+
+		log.Error(ctx, "refresh session TTL failed",
+			log.String("err", err.Error()),
+			log.String("user_id", req.UserId),
+			log.String("device_id", req.DeviceId),
+		)
+		return &sessionpb.RefreshSessionTTLResp{
+			Code:    xerr.ErrInternalServer.Code(),
+			Message: xerr.ErrInternalServer.Error(),
+		}, nil
+	}
+
+	log.Debug(ctx, "session TTL refreshed",
+		log.String("user_id", req.UserId),
+		log.String("device_id", req.DeviceId),
+		log.Int64("last_active_at", req.LastActiveAt),
+	)
+
+	return &sessionpb.RefreshSessionTTLResp{
 		Code:    xerr.OK.Code(),
 		Message: xerr.OK.Error(),
 	}, nil

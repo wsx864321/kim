@@ -1,6 +1,8 @@
 package gateway
 
 import (
+	"context"
+	sessionpb "github.com/wsx864321/kim/idl/session"
 	"net"
 )
 
@@ -13,25 +15,29 @@ type Transport interface {
 	// SetHandler 设置事件回调
 	SetHandler(h EventHandler)
 	// Send 发送消息到指定连接
-	Send(connID int, data []byte) error
+	Send(ctx context.Context, connID int, data []byte) error
 	// BatchSend 批量发送消息到多个连接（发送相同消息）
-	BatchSend(connIDs []int, data []byte) error
+	BatchSend(ctx context.Context, connIDs []int, data []byte) ([]uint64, error)
 	// CloseConn 关闭指定连接
-	CloseConn(connID int) error
+	CloseConn(ctx context.Context, connID int) error
 }
 
 // EventHandler 定义 Transport 生命周期回调
 type EventHandler interface {
+	// OnLogin 鉴权登录
+	OnLogin(ctx context.Context, conn net.Conn, payload []byte, gatewayID string) (*sessionpb.Session, error)
 	// OnConnect 连接建立且已鉴权
-	OnConnect(conn Connection) error
+	OnConnect(ctx context.Context, conn Connection) error
 	// OnMessage 收到业务消息
-	OnMessage(conn Connection, data []byte) error
+	OnMessage(ctx context.Context, conn Connection, data []byte) error
 	// OnDisconnect 连接断开
-	OnDisconnect(conn Connection, reason string)
+	OnDisconnect(ctx context.Context, conn Connection, reason string)
 	// OnHeartbeatTimeout 心跳超时
-	OnHeartbeatTimeout(conn Connection)
+	OnHeartbeatTimeout(ctx context.Context, conn Connection)
 	// OnHeartbeat 收到心跳消息
-	OnHeartbeat(conn Connection)
+	OnHeartbeat(ctx context.Context, conn Connection)
+	// OnRefreshSession 刷新会话信息
+	OnRefreshSession(ctx context.Context, conn Connection, lastActiveAt int64) error
 }
 
 // Connection 连接信息接口，提供给 EventHandler 使用（屏蔽一些参数）
