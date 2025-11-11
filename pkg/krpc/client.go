@@ -33,7 +33,9 @@ func NewKClient(opts ...ClientOption) (*KClient, error) {
 		clientOptions: opt,
 	}
 
-	resolver.Register(presolver.NewRegistryBuilder(p.registry))
+	if p.registry == nil {
+		resolver.Register(presolver.NewRegistryBuilder(p.registry))
+	}
 
 	conn, err := p.dial()
 	p.conn = conn
@@ -60,6 +62,10 @@ func (p *KClient) dial() (*grpc.ClientConn, error) {
 		balancerOpt,
 		grpc.WithChainUnaryInterceptor(interceptors...),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+
+	if p.direct {
+		return grpc.NewClient(p.url, options...)
 	}
 
 	return grpc.NewClient(fmt.Sprintf("discov:///%v", p.serviceName), options...)

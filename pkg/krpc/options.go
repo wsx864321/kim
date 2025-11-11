@@ -15,6 +15,8 @@ type serverOptions struct {
 
 type clientOptions struct {
 	serviceName  string
+	direct       bool
+	url          string
 	registry     registry.Registrar
 	interceptors []grpc.UnaryClientInterceptor
 }
@@ -72,8 +74,23 @@ func WithClientInterceptors(interceptors ...grpc.UnaryClientInterceptor) ClientO
 	}
 }
 
+// WithClientServiceName set serviceName
 func WithClientServiceName(serviceName string) ClientOption {
 	return func(opts *clientOptions) {
 		opts.serviceName = serviceName
+	}
+}
+
+// WithDirect 是否直连服务地址
+func WithDirect(direct bool) ClientOption {
+	return func(opts *clientOptions) {
+		opts.direct = direct
+	}
+}
+
+// WithURL 直接设置服务地址
+func WithURL(url string) ClientOption {
+	return func(opts *clientOptions) {
+		opts.url = url
 	}
 }
