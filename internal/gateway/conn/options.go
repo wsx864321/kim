@@ -1,4 +1,4 @@
-package gateway
+package conn
 
 import (
 	"time"
@@ -24,13 +24,6 @@ func WithTCPNumWorkers(n int) TCPOption {
 func WithGatewayID(gatewayID string) TCPOption {
 	return func(o *TCPTransport) {
 		o.gatewayID = gatewayID
-	}
-}
-
-// WithSessionClient 设置 Session 服务客户端
-func WithSessionClient(client SessionServiceClient) TCPOption {
-	return func(o *TCPTransport) {
-		o.sessionClient = client
 	}
 }
 

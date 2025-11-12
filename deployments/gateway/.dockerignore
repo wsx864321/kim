@@ -1,0 +1,46 @@
+# Git 相关
+.git
+.gitignore
+.gitattributes
+
+# 文档
+README.md
+docs/
+
+# IDE 配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 测试文件
+*_test.go
+**/*_test.go
+
+# 构建产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+gateway
+*.test
+*.out
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.log
+
+# 依赖目录（会在构建时下载）
+vendor/
+
+# 其他部署配置
+deployments/session/
+deployments/push/
+
+# 示例和测试代码
+pkg/krpc/example/
+

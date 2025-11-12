@@ -1,4 +1,4 @@
-package controller
+package handler
 
 import (
 	"context"
@@ -8,26 +8,26 @@ import (
 	"github.com/wsx864321/kim/pkg/xerr"
 )
 
-type SessionController struct {
+type SessionHandler struct {
 	sessionpb.UnimplementedSessionServiceServer
 
 	service *logic.SessionService
 }
 
-// NewSessionController 创建 Session 控制器
-func NewSessionController(s *logic.SessionService) *SessionController {
-	return &SessionController{
+// NewSessionHandler 创建 Session 控制器
+func NewSessionHandler(s *logic.SessionService) *SessionHandler {
+	return &SessionHandler{
 		service: s,
 	}
 }
 
 // Login 用户登录，创建会话
-func (s *SessionController) Login(ctx context.Context, req *sessionpb.LoginReq) (*sessionpb.LoginResp, error) {
+func (s *SessionHandler) Login(ctx context.Context, req *sessionpb.LoginReq) (*sessionpb.LoginResp, error) {
 	return s.service.Login(ctx, req)
 }
 
 // GetSessions 获取用户会话列表
-func (s *SessionController) GetSessions(ctx context.Context, req *sessionpb.GetSessionsReq) (*sessionpb.GetSessionsResp, error) {
+func (s *SessionHandler) GetSessions(ctx context.Context, req *sessionpb.GetSessionsReq) (*sessionpb.GetSessionsResp, error) {
 	if req.UserId == "" {
 		log.Warn(ctx, "user_id is required")
 		return &sessionpb.GetSessionsResp{
@@ -40,7 +40,7 @@ func (s *SessionController) GetSessions(ctx context.Context, req *sessionpb.GetS
 }
 
 // Kick 踢人
-func (s *SessionController) Kick(ctx context.Context, req *sessionpb.KickReq) (*sessionpb.KickResp, error) {
+func (s *SessionHandler) Kick(ctx context.Context, req *sessionpb.KickReq) (*sessionpb.KickResp, error) {
 	if req.UserId == "" {
 		log.Warn(ctx, "user_id is required")
 		return &sessionpb.KickResp{
@@ -53,7 +53,7 @@ func (s *SessionController) Kick(ctx context.Context, req *sessionpb.KickReq) (*
 }
 
 // RefreshSessionTTL 刷新会话 TTL
-func (s *SessionController) RefreshSessionTTL(ctx context.Context, req *sessionpb.RefreshSessionTTLReq) (*sessionpb.RefreshSessionTTLResp, error) {
+func (s *SessionHandler) RefreshSessionTTL(ctx context.Context, req *sessionpb.RefreshSessionTTLReq) (*sessionpb.RefreshSessionTTLResp, error) {
 	if req.UserId == "" {
 		log.Warn(ctx, "user_id is required")
 		return &sessionpb.RefreshSessionTTLResp{

@@ -1,4 +1,4 @@
-package gateway
+package id
 
 import (
 	"sync"
@@ -6,21 +6,21 @@ import (
 	"time"
 )
 
-var connIDGenerator = NewIDGenerator()
+var connIDGenerator = newGenerator()
 
-type IDGenerator struct {
+type generator struct {
 	baseTime time.Time
 	idState  int64
 	mu       sync.Mutex
 }
 
-func NewIDGenerator() *IDGenerator {
-	return &IDGenerator{
+func newGenerator() *generator {
+	return &generator{
 		baseTime: time.Unix(1759248000, 0), // 2025-10-01 00:00:00
 	}
 }
 
-// NextID 生成连接ID
+// nextID 生成连接ID
 // 格式：相对时间戳(毫秒) * 1000000 + 自增序列号(6位，1-999999)
 //
 // 优点：
@@ -36,8 +36,8 @@ func NewIDGenerator() *IDGenerator {
 //   - 连接ID只在单节点内唯一，不同Gateway节点可能有相同ID
 //   - 如果未来需要全局唯一，可以在ID前加上GatewayID前缀
 //   - 每毫秒最多支持999999个连接（足够使用）
-//   - 服务重启后，基准时间会重新计算，保证ID不重复
-func (i *IDGenerator) NextID() uint64 {
+//   - 基准时间是固定的，不随服务重启而变化，是2025-10-01 00:00:00
+func (i *generator) nextID() uint64 {
 	now := time.Now()
 
 	// 计算相对时间戳（毫秒），从服务启动时间开始
@@ -85,4 +85,11 @@ func (i *IDGenerator) NextID() uint64 {
 	id := relativeMs*1000000 + seq
 
 	return uint64(id)
+}
+
+var idGenerator = newGenerator()
+
+// NextID 生成连接ID
+func NextID() uint64 {
+	return idGenerator.nextID()
 }

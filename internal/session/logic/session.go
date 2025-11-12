@@ -5,7 +5,7 @@ import (
 	"errors"
 	"github.com/golang/protobuf/proto"
 	sessionpb "github.com/wsx864321/kim/idl/session"
-	"github.com/wsx864321/kim/internal/session/repository/redis"
+	"github.com/wsx864321/kim/internal/session/infra/redis"
 	"github.com/wsx864321/kim/pkg/log"
 	"github.com/wsx864321/kim/pkg/xerr"
 	"github.com/wsx864321/kim/pkg/xjson"

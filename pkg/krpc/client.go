@@ -33,7 +33,7 @@ func NewKClient(opts ...ClientOption) (*KClient, error) {
 		clientOptions: opt,
 	}
 
-	if p.registry == nil {
+	if p.registry != nil {
 		resolver.Register(presolver.NewRegistryBuilder(p.registry))
 	}
 

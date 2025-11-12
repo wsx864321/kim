@@ -1,4 +1,4 @@
-package gateway
+package conn
 
 import (
 	"sync"

@@ -1,4 +1,4 @@
-package gateway
+package conn
 
 import (
 	"context"
@@ -32,8 +32,6 @@ type EventHandler interface {
 	OnMessage(ctx context.Context, conn Connection, data []byte) error
 	// OnDisconnect 连接断开
 	OnDisconnect(ctx context.Context, conn Connection, reason string)
-	// OnHeartbeatTimeout 心跳超时
-	OnHeartbeatTimeout(ctx context.Context, conn Connection)
 	// OnHeartbeat 收到心跳消息
 	OnHeartbeat(ctx context.Context, conn Connection)
 	// OnRefreshSession 刷新会话信息

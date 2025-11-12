@@ -3,10 +3,10 @@ package server
 import (
 	"context"
 	sessionpb "github.com/wsx864321/kim/idl/session"
-	"github.com/wsx864321/kim/internal/session/controller"
-	logic "github.com/wsx864321/kim/internal/session/logic"
+	"github.com/wsx864321/kim/internal/session/handler"
+	"github.com/wsx864321/kim/internal/session/infra/redis"
+	"github.com/wsx864321/kim/internal/session/logic"
 	"github.com/wsx864321/kim/internal/session/pkg/config"
-	"github.com/wsx864321/kim/internal/session/repository/redis"
 	"github.com/wsx864321/kim/pkg/krpc"
 	"github.com/wsx864321/kim/pkg/log"
 	"google.golang.org/grpc"
@@ -32,16 +32,16 @@ func Run(configPath string) {
 
 	// 注册 Session 服务
 	s.RegisterService(func(server *grpc.Server) {
-		sessionpb.RegisterSessionServiceServer(server, CreateSessionController())
+		sessionpb.RegisterSessionServiceServer(server, createSessionHandler())
 	})
 
 	// 启动服务（会阻塞）
 	s.Start(context.Background())
 }
 
-// CreateSessionController 创建 Session 控制器
-func CreateSessionController() *controller.SessionController {
-	return controller.NewSessionController(
+// createSessionHandler 创建 Session 控制器
+func createSessionHandler() *handler.SessionHandler {
+	return handler.NewSessionHandler(
 		logic.NewSessionService(
 			redis.NewInstance(),
 		),

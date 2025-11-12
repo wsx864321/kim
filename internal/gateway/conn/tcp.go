@@ -1,4 +1,4 @@
-package gateway
+package conn
 
 import (
 	"context"
@@ -11,13 +11,7 @@ import (
 
 	sessionpb "github.com/wsx864321/kim/idl/session"
 	"github.com/wsx864321/kim/pkg/log"
-	"google.golang.org/grpc"
 )
-
-// SessionServiceClient Session 服务客户端接口
-type SessionServiceClient interface {
-	RefreshSessionTTL(ctx context.Context, in *sessionpb.RefreshSessionTTLReq, opts ...grpc.CallOption) (*sessionpb.RefreshSessionTTLResp, error)
-}
 
 type TCPTransport struct {
 	port               int
@@ -31,10 +25,9 @@ type TCPTransport struct {
 	stopped            int32
 	heartbeatTimeout   time.Duration
 	numWorkers         int
-	gatewayID          string               // Gateway 节点ID
-	sessionClient      SessionServiceClient // Session 服务客户端
-	timeWheel          *timeWheel           // 时间轮定时器
-	refreshTTLInterval time.Duration        // 刷新TTL的间隔（默认60s）
+	gatewayID          string        // Gateway 节点ID
+	timeWheel          *timeWheel    // 时间轮定时器
+	refreshTTLInterval time.Duration // 刷新TTL的间隔（默认60s）
 }
 
 // NewTCPTransport 创建 TCP Transport
@@ -96,7 +89,7 @@ func (t *TCPTransport) Start() error {
 	go t.heartbeatLoop()
 
 	// 启动时间轮定时器
-	if t.timeWheel != nil && t.sessionClient != nil {
+	if t.timeWheel != nil {
 		t.timeWheel.start(t.refreshSessionTTL)
 	}
 
@@ -382,10 +375,6 @@ func (t *TCPTransport) heartbeatLoop() {
 			for _, conn := range conns {
 				lastActive := conn.getLastActiveTime()
 				if now.Sub(lastActive) > t.heartbeatTimeout {
-					// 心跳超时
-					if t.handler != nil {
-						t.handler.OnHeartbeatTimeout(ctx, conn)
-					}
 					t.handleDisconnect(ctx, conn, "heartbeat timeout")
 				}
 			}
@@ -474,10 +463,6 @@ func (t *TCPTransport) CloseConn(ctx context.Context, connID int) error {
 
 // refreshSessionTTL 刷新Session TTL的回调函数
 func (t *TCPTransport) refreshSessionTTL(conns []*connection) {
-	if t.sessionClient == nil {
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
 

@@ -1,4 +1,4 @@
-package gateway
+package conn
 
 import (
 	"context"
@@ -144,7 +144,7 @@ func (tw *timeWheel) run(callback func([]*connection)) {
 
 			// 执行回调
 			if len(conns) > 0 && callback != nil {
-				callback(conns)
+				go callback(conns)
 			}
 
 			// 清空当前槽位，连接会被重新添加到下一个槽位（如果需要继续刷新）

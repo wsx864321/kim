@@ -1,0 +1,60 @@
+# KIM Gateway Service 配置文件
+
+# 日志配置
+log:
+  # 是否启用 Debug 模式 (true: 输出到控制台和文件, false: 只输出到文件)
+  debug: true
+  # 日志目录
+  dir: "/home/www/logs/applogs"
+  # 日志文件名
+  filename: "gateway.log"
+
+# Gateway 服务配置
+gateway:
+  # 服务名称
+  service_name: "kim-gateway"
+  
+  # 服务 IP 地址
+  ip: "127.0.0.1"
+  
+  # gRPC 服务端口（用于接收 Push 服务推送消息）
+  port: 9002
+  
+  # TCP 端口（用于客户端连接）
+  tcp_port: 8080
+  
+  # Gateway 节点ID（用于区分不同的 Gateway 实例）
+  gateway_id: "gateway-1"
+  
+  # 心跳超时时间（秒），超过此时间没有心跳的连接将被关闭
+  heartbeat_timeout: 180  # 3 分钟
+  
+  # 刷新 TTL 间隔（秒），定期刷新 Session 的 TTL
+  refresh_ttl_interval: 60  # 1 分钟
+  
+  # 工作协程数量（0 表示使用默认值：2 * CPU核心数）
+  num_workers: 10
+
+# 服务注册中心配置 (可选，如果不需要服务注册可以删除此部分)
+registry:
+  # 注册中心类型 (etcd/consul/zookeeper)
+  type: "etcd"
+  # 注册中心端点列表
+  endpoints:
+    - "127.0.0.1:2379"
+  # 连接超时时间 (秒)
+  timeout: 5
+
+# KRPC 框架配置 (可选)
+krpc:
+  # 追踪配置
+  trace:
+    # 是否启用追踪
+    enable: false
+    # Jaeger 收集器地址
+    url: "http://127.0.0.1:14268/api/traces"
+    # 服务名称 (用于追踪)
+    service_name: "kim-gateway"
+    # 采样率 (0.0 - 1.0)
+    sampler: 1.0
+
