@@ -15,11 +15,11 @@ type Transport interface {
 	// SetHandler 设置事件回调
 	SetHandler(h EventHandler)
 	// Send 发送消息到指定连接
-	Send(ctx context.Context, connID int, data []byte) error
+	Send(ctx context.Context, connID uint64, data []byte) error
 	// BatchSend 批量发送消息到多个连接（发送相同消息）
-	BatchSend(ctx context.Context, connIDs []int, data []byte) ([]uint64, error)
+	BatchSend(ctx context.Context, connIDs []uint64, data []byte) ([]uint64, error)
 	// CloseConn 关闭指定连接
-	CloseConn(ctx context.Context, connID int) error
+	CloseConn(ctx context.Context, connID uint64) error
 }
 
 // EventHandler 定义 Transport 生命周期回调

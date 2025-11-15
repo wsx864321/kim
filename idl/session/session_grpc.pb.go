@@ -4,7 +4,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v3.21.12
-// source: session.proto
+// source: idl/session/session.proto
 
 package session
 
@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	SessionService_Login_FullMethodName             = "/session.SessionService/Login"
-	SessionService_Logout_FullMethodName            = "/session.SessionService/Logout"
+	SessionService_DelSession_FullMethodName        = "/session.SessionService/DelSession"
 	SessionService_GetSessions_FullMethodName       = "/session.SessionService/GetSessions"
 	SessionService_Kick_FullMethodName              = "/session.SessionService/Kick"
 	SessionService_RefreshSessionTTL_FullMethodName = "/session.SessionService/RefreshSessionTTL"
@@ -36,8 +36,8 @@ const (
 type SessionServiceClient interface {
 	// Login 用户登录
 	Login(ctx context.Context, in *LoginReq, opts ...grpc.CallOption) (*LoginResp, error)
-	// Logout 用户登出
-	Logout(ctx context.Context, in *LoginReq, opts ...grpc.CallOption) (*LoginResp, error)
+	// DelSession 删除用户会话
+	DelSession(ctx context.Context, in *DelSessionReq, opts ...grpc.CallOption) (*DelSessionResp, error)
 	// GetSessions 获取用户会话列表
 	GetSessions(ctx context.Context, in *GetSessionsReq, opts ...grpc.CallOption) (*GetSessionsResp, error)
 	// KickSession 踢人
@@ -64,10 +64,10 @@ func (c *sessionServiceClient) Login(ctx context.Context, in *LoginReq, opts ...
 	return out, nil
 }
 
-func (c *sessionServiceClient) Logout(ctx context.Context, in *LoginReq, opts ...grpc.CallOption) (*LoginResp, error) {
+func (c *sessionServiceClient) DelSession(ctx context.Context, in *DelSessionReq, opts ...grpc.CallOption) (*DelSessionResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(LoginResp)
-	err := c.cc.Invoke(ctx, SessionService_Logout_FullMethodName, in, out, cOpts...)
+	out := new(DelSessionResp)
+	err := c.cc.Invoke(ctx, SessionService_DelSession_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,8 +112,8 @@ func (c *sessionServiceClient) RefreshSessionTTL(ctx context.Context, in *Refres
 type SessionServiceServer interface {
 	// Login 用户登录
 	Login(context.Context, *LoginReq) (*LoginResp, error)
-	// Logout 用户登出
-	Logout(context.Context, *LoginReq) (*LoginResp, error)
+	// DelSession 删除用户会话
+	DelSession(context.Context, *DelSessionReq) (*DelSessionResp, error)
 	// GetSessions 获取用户会话列表
 	GetSessions(context.Context, *GetSessionsReq) (*GetSessionsResp, error)
 	// KickSession 踢人
@@ -133,8 +133,8 @@ type UnimplementedSessionServiceServer struct{}
 func (UnimplementedSessionServiceServer) Login(context.Context, *LoginReq) (*LoginResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
 }
-func (UnimplementedSessionServiceServer) Logout(context.Context, *LoginReq) (*LoginResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Logout not implemented")
+func (UnimplementedSessionServiceServer) DelSession(context.Context, *DelSessionReq) (*DelSessionResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DelSession not implemented")
 }
 func (UnimplementedSessionServiceServer) GetSessions(context.Context, *GetSessionsReq) (*GetSessionsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSessions not implemented")
@@ -184,20 +184,20 @@ func _SessionService_Login_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _SessionService_Logout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LoginReq)
+func _SessionService_DelSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DelSessionReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(SessionServiceServer).Logout(ctx, in)
+		return srv.(SessionServiceServer).DelSession(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: SessionService_Logout_FullMethodName,
+		FullMethod: SessionService_DelSession_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SessionServiceServer).Logout(ctx, req.(*LoginReq))
+		return srv.(SessionServiceServer).DelSession(ctx, req.(*DelSessionReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -268,8 +268,8 @@ var SessionService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _SessionService_Login_Handler,
 		},
 		{
-			MethodName: "Logout",
-			Handler:    _SessionService_Logout_Handler,
+			MethodName: "DelSession",
+			Handler:    _SessionService_DelSession_Handler,
 		},
 		{
 			MethodName: "GetSessions",
@@ -285,5 +285,5 @@ var SessionService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "session.proto",
+	Metadata: "idl/session/session.proto",
 }

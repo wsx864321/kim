@@ -6,6 +6,7 @@ import (
 	logic "github.com/wsx864321/kim/internal/session/logic"
 	"github.com/wsx864321/kim/pkg/log"
 	"github.com/wsx864321/kim/pkg/xerr"
+	"google.golang.org/protobuf/proto"
 )
 
 type SessionHandler struct {
@@ -23,7 +24,52 @@ func NewSessionHandler(s *logic.SessionService) *SessionHandler {
 
 // Login 用户登录，创建会话
 func (s *SessionHandler) Login(ctx context.Context, req *sessionpb.LoginReq) (*sessionpb.LoginResp, error) {
-	return s.service.Login(ctx, req)
+	var auth sessionpb.AuthInfo
+	if err := proto.Unmarshal(req.Payload, &auth); err != nil {
+		log.Warn(ctx, "unmarshal auth info failed", log.String("err", err.Error()))
+		return &sessionpb.LoginResp{
+			Code:    xerr.ErrInvalidParams.Code(),
+			Message: xerr.ErrInvalidParams.Error(),
+		}, nil
+	}
+
+	resp, err := s.service.Login(ctx, &auth, req)
+	if err != nil {
+		return &sessionpb.LoginResp{
+			Code:    xerr.Convert(err).Code(),
+			Message: xerr.Convert(err).Error(),
+		}, nil
+	}
+
+	return &sessionpb.LoginResp{
+		Code:    xerr.OK.Code(),
+		Message: xerr.OK.Error(),
+		Data:    resp,
+	}, nil
+}
+
+// DelSession 删除用户会话
+func (s *SessionHandler) DelSession(ctx context.Context, req *sessionpb.DelSessionReq) (*sessionpb.DelSessionResp, error) {
+	if req.UserId == "" {
+		log.Warn(ctx, "user_id is required")
+		return &sessionpb.DelSessionResp{
+			Code:    xerr.ErrInvalidParams.Code(),
+			Message: "user_id is required",
+		}, nil
+	}
+
+	err := s.service.DelSession(ctx, req)
+	if err != nil {
+		return &sessionpb.DelSessionResp{
+			Code:    err.Code(),
+			Message: err.Error(),
+		}, nil
+	}
+
+	return &sessionpb.DelSessionResp{
+		Code:    xerr.OK.Code(),
+		Message: xerr.OK.Error(),
+	}, nil
 }
 
 // GetSessions 获取用户会话列表
@@ -36,7 +82,19 @@ func (s *SessionHandler) GetSessions(ctx context.Context, req *sessionpb.GetSess
 		}, nil
 	}
 
-	return s.service.GetSessions(ctx, req)
+	resp, err := s.service.GetSessions(ctx, req)
+	if err != nil {
+		return &sessionpb.GetSessionsResp{
+			Code:    err.Code(),
+			Message: err.Error(),
+		}, nil
+	}
+
+	return &sessionpb.GetSessionsResp{
+		Code:    xerr.OK.Code(),
+		Message: xerr.OK.Error(),
+		Data:    resp,
+	}, nil
 }
 
 // Kick 踢人
@@ -49,7 +107,18 @@ func (s *SessionHandler) Kick(ctx context.Context, req *sessionpb.KickReq) (*ses
 		}, nil
 	}
 
-	return s.service.Kick(ctx, req)
+	err := s.service.Kick(ctx, req)
+	if err != nil {
+		return &sessionpb.KickResp{
+			Code:    err.Code(),
+			Message: err.Error(),
+		}, nil
+	}
+
+	return &sessionpb.KickResp{
+		Code:    xerr.OK.Code(),
+		Message: xerr.OK.Error(),
+	}, nil
 }
 
 // RefreshSessionTTL 刷新会话 TTL
@@ -69,5 +138,17 @@ func (s *SessionHandler) RefreshSessionTTL(ctx context.Context, req *sessionpb.R
 			Message: xerr.ErrInvalidParams.Error(),
 		}, nil
 	}
-	return s.service.RefreshSessionTTL(ctx, req)
+
+	err := s.service.RefreshSessionTTL(ctx, req)
+	if err != nil {
+		return &sessionpb.RefreshSessionTTLResp{
+			Code:    err.Code(),
+			Message: err.Error(),
+		}, nil
+	}
+
+	return &sessionpb.RefreshSessionTTLResp{
+		Code:    xerr.OK.Code(),
+		Message: xerr.OK.Error(),
+	}, nil
 }

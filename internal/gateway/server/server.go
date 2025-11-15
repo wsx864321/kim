@@ -2,10 +2,11 @@ package server
 
 import (
 	"context"
+	"github.com/wsx864321/kim/internal/gateway/event"
+	"github.com/wsx864321/kim/internal/gateway/infra/grpc/session"
 	"time"
 
 	gatewaypb "github.com/wsx864321/kim/idl/gateway"
-	sessionpb "github.com/wsx864321/kim/idl/session"
 	"github.com/wsx864321/kim/internal/gateway/conn"
 	"github.com/wsx864321/kim/internal/gateway/handler"
 	"github.com/wsx864321/kim/internal/gateway/pkg/config"
@@ -35,11 +36,14 @@ func Run(configPath string) {
 		panic(err)
 	}
 
+	// 创建Session客户端管理器
+	sessionClient := session.NewClient()
+
 	// 创建Handler
-	gatewayHandler := handler.NewGatewayHandler(createSessionClient(), tcpTransport)
+	gatewayHandler := handler.NewGatewayHandler(sessionClient, tcpTransport)
 
 	// 设置Handler到Transport
-	tcpTransport.SetHandler(gatewayHandler)
+	tcpTransport.SetHandler(event.NewEvent(sessionClient))
 
 	// 启动TCP Transport
 	if err := tcpTransport.Start(); err != nil {
@@ -69,15 +73,6 @@ func Run(configPath string) {
 
 	// 启动gRPC服务（会阻塞）
 	grpcServer.Start(ctx)
-}
-
-// createSessionClient 创建 Session gRPC 客户端
-func createSessionClient() sessionpb.SessionServiceClient {
-	cli, err := krpc.NewKClient(krpc.WithClientServiceName("kim-session"))
-	if err != nil {
-		panic(err)
-	}
-	return sessionpb.NewSessionServiceClient(cli.Conn())
 }
 
 // createTCPTransport 创建TCP Transport

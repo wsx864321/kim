@@ -49,7 +49,7 @@ func (p *connPool) remove(conn *connection) {
 }
 
 // getByID 根据连接ID获取连接
-func (p *connPool) getByID(connID int) (*connection, bool) {
+func (p *connPool) getByID(connID uint64) (*connection, bool) {
 	conn, ok := p.connsByID.Load(connID)
 	if !ok {
 		return nil, false

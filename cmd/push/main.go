@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/wsx864321/kim/internal/gateway/server"
+	"github.com/wsx864321/kim/internal/push/server"
 )
 
 var (
@@ -13,10 +13,10 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gateway",
-	Short: "KIM Gateway Service",
-	Long:  "KIM Gateway Service - 提供客户端连接网关服务",
-	Run:   runGateway,
+	Use:   "push",
+	Short: "KIM Push Service",
+	Long:  "KIM Push Service - 提供消息推送服务",
+	Run:   runPush,
 }
 
 func init() {
@@ -24,7 +24,7 @@ func init() {
 	rootCmd.MarkFlagRequired("config")
 }
 
-func runGateway(cmd *cobra.Command, args []string) {
+func runPush(cmd *cobra.Command, args []string) {
 	if configPath == "" {
 		fmt.Fprintf(os.Stderr, "Error: 配置文件路径不能为空\n")
 		cmd.Help()
@@ -47,6 +47,4 @@ func main() {
 		os.Exit(1)
 	}
 }
-
-
 

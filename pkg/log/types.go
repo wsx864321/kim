@@ -16,6 +16,7 @@ var (
 	Bool     = zap.Bool
 	Int      = zap.Int
 	String   = zap.String
+	Strings  = zap.Strings
 	Any      = zap.Any
 	Duration = zap.Duration
 	Float64  = zap.Float64

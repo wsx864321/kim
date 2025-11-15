@@ -4,7 +4,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v3.21.12
-// source: push.proto
+// source: idl/push/push.proto
 
 package push
 
@@ -205,5 +205,5 @@ var PushService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "push.proto",
+	Metadata: "idl/push/push.proto",
 }

@@ -389,7 +389,7 @@ func (t *TCPTransport) SetHandler(h EventHandler) {
 }
 
 // Send 发送消息到指定连接
-func (t *TCPTransport) Send(ctx context.Context, connID int, data []byte) error {
+func (t *TCPTransport) Send(ctx context.Context, connID uint64, data []byte) error {
 	conn, ok := t.connPool.getByID(connID)
 	if !ok {
 		return errors.New("connection not found")
@@ -414,7 +414,7 @@ func (t *TCPTransport) Send(ctx context.Context, connID int, data []byte) error 
 }
 
 // BatchSend 批量发送消息到多个连接（发送相同消息）
-func (t *TCPTransport) BatchSend(ctx context.Context, connIDs []int, data []byte) ([]uint64, error) {
+func (t *TCPTransport) BatchSend(ctx context.Context, connIDs []uint64, data []byte) ([]uint64, error) {
 	if len(connIDs) == 0 {
 		return nil, nil
 	}
@@ -436,13 +436,13 @@ func (t *TCPTransport) BatchSend(ctx context.Context, connIDs []int, data []byte
 		conn, ok := t.connPool.getByID(connID)
 		if !ok {
 			log.Warn(ctx, "connection not found", log.Uint64("connID", uint64(connID)))
-			failConns = append(failConns, uint64(connID))
+			failConns = append(failConns, connID)
 			continue
 		}
 
 		if _, err := conn.conn.Write(encoded); err != nil {
 			log.Warn(ctx, "send batch message failed", log.String("error", err.Error()), log.Uint64("connID", uint64(connID)))
-			failConns = append(failConns, uint64(connID))
+			failConns = append(failConns, connID)
 		}
 	}
 
@@ -450,7 +450,7 @@ func (t *TCPTransport) BatchSend(ctx context.Context, connIDs []int, data []byte
 }
 
 // CloseConn 关闭指定连接
-func (t *TCPTransport) CloseConn(ctx context.Context, connID int) error {
+func (t *TCPTransport) CloseConn(ctx context.Context, connID uint64) error {
 	conn, ok := t.connPool.getByID(connID)
 	if !ok {
 		return errors.New("connection not found")
@@ -472,7 +472,7 @@ func (t *TCPTransport) refreshSessionTTL(conns []*connection) {
 			return
 		}
 		// 检查连接是否仍然有效
-		if _, ok := t.connPool.getByID(int(conn.id)); !ok {
+		if _, ok := t.connPool.getByID(conn.id); !ok {
 			// 连接已断开，跳过
 			continue
 		}
@@ -481,9 +481,8 @@ func (t *TCPTransport) refreshSessionTTL(conns []*connection) {
 		lastActiveAt := conn.getLastActiveTime().Unix()
 
 		err := t.handler.OnRefreshSession(ctx, conn, lastActiveAt)
-		if err != nil {
-			// 刷新失败，需要关闭连接
-			t.handleDisconnect(ctx, conn, "refresh session timeout")
+		if err != nil { // 刷新失败，断开连接
+			t.handleDisconnect(ctx, conn, "refresh session err")
 			continue
 		}
 		// 刷新成功，将连接重新添加到时间轮，以便下次继续刷新

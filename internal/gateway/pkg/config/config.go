@@ -96,3 +96,4 @@ func GetLogFilename() string {
 	}
 	return filename
 }
+

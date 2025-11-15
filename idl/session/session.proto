@@ -9,8 +9,8 @@ package session;
 service SessionService {
   // Login 用户登录
   rpc Login (LoginReq) returns (LoginResp);
-  // Logout 用户登出
-  rpc Logout (LoginReq) returns (LoginResp);
+  // DelSession 删除用户会话
+  rpc DelSession (DelSessionReq) returns (DelSessionResp);
   // GetSessions 获取用户会话列表
   rpc GetSessions (GetSessionsReq) returns (GetSessionsResp);
   // KickSession 踢人
@@ -127,7 +127,7 @@ message GetSessionsReq {
   // user_id 用户ID
   string user_id = 1;
   // device_id 设备ID（可选，若为空则获取该用户所有设备的会话）
-  string device_id = 2;
+  repeated string device_id = 2;
 }
 
 // GetSessionsResp 获取会话响应
@@ -176,6 +176,24 @@ message RefreshSessionTTLReq {
 
 // RefreshSessionTTLResp 刷新会话 TTL 响应
 message RefreshSessionTTLResp {
+  // code 响应码，0表示成功，非0表示失败
+  int32 code = 1;
+  // message 响应消息，通常用于错误描述
+  string message = 2;
+}
+
+// DelSessionReq 删除会话请求
+message DelSessionReq {
+  // user_id 用户ID
+  string user_id = 2;
+  // device_id 设备ID（可选，若为空则删除该用户所有设备的会话）
+  repeated string device_id = 3;
+  // reason 删除原因（可选）
+  string reason = 4;
+}
+
+// DelSessionResp 删除会话响应
+message DelSessionResp {
   // code 响应码，0表示成功，非0表示失败
   int32 code = 1;
   // message 响应消息，通常用于错误描述

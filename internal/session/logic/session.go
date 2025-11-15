@@ -3,7 +3,6 @@ package logic
 import (
 	"context"
 	"errors"
-	"github.com/golang/protobuf/proto"
 	sessionpb "github.com/wsx864321/kim/idl/session"
 	"github.com/wsx864321/kim/internal/session/infra/redis"
 	"github.com/wsx864321/kim/pkg/log"
@@ -24,31 +23,16 @@ func NewSessionService(r redis.InstanceInterface) *SessionService {
 }
 
 // Login 用户登录，创建会话
-func (s *SessionService) Login(ctx context.Context, req *sessionpb.LoginReq) (*sessionpb.LoginResp, error) {
-	var auth sessionpb.AuthInfo
-	if err := proto.Unmarshal(req.Payload, &auth); err != nil {
-		log.Warn(ctx, "unmarshal auth info failed", log.String("err", err.Error()))
-		return &sessionpb.LoginResp{
-			Code:    xerr.ErrInvalidParams.Code(),
-			Message: xerr.ErrInvalidParams.Error(),
-		}, nil
-	}
-
+func (s *SessionService) Login(ctx context.Context, auth *sessionpb.AuthInfo, req *sessionpb.LoginReq) (*sessionpb.LoginData, *xerr.Error) {
 	claim, err := ParseJWT(auth.Token)
 	if err != nil {
-		log.Warn(ctx, "parse jwt token failed", log.String("err", err.Error()))
-		return &sessionpb.LoginResp{
-			Code:    xerr.ErrUnauthorized.Code(),
-			Message: xerr.ErrUnauthorized.Error(),
-		}, nil
+		log.Warn(ctx, "parse jwt token failed", log.String("error", err.Error()))
+		return nil, xerr.ErrInvalidParams.WithMessage("invalid token")
 	}
 	now := time.Now().Unix()
 	if now >= claim.ExpireTime {
 		log.Warn(ctx, "token is expired", log.String("user_id", claim.UserID), log.Int64("expire_time", claim.ExpireTime))
-		return &sessionpb.LoginResp{
-			Code:    xerr.ErrUnauthorized.Code(),
-			Message: xerr.ErrUnauthorized.Error(),
-		}, nil
+		return nil, xerr.ErrInvalidParams.WithMessage("token is expired")
 	}
 
 	session := &sessionpb.Session{
@@ -70,76 +54,78 @@ func (s *SessionService) Login(ctx context.Context, req *sessionpb.LoginReq) (*s
 			log.String("err", err.Error()),
 			log.String("data", xjson.MarshalString(session)),
 		)
-		return &sessionpb.LoginResp{
-			Code:    xerr.ErrInternalServer.Code(),
-			Message: xerr.ErrInternalServer.Error(),
-		}, nil
+		return nil, xerr.ErrInternalServer
 	}
 
-	return &sessionpb.LoginResp{
-		Code:    xerr.OK.Code(),
-		Message: xerr.OK.Error(),
-		Data: &sessionpb.LoginData{
-			Session: session,
-		},
+	return &sessionpb.LoginData{
+		Session: session,
 	}, nil
 }
 
 // GetSessions 获取用户会话列表
-func (s *SessionService) GetSessions(ctx context.Context, req *sessionpb.GetSessionsReq) (*sessionpb.GetSessionsResp, error) {
-	var sessions []*sessionpb.Session
-	var err error
+func (s *SessionService) GetSessions(ctx context.Context, req *sessionpb.GetSessionsReq) (*sessionpb.GetSessionsData, *xerr.Error) {
+	// 验证参数
+	if req.UserId == "" {
+		log.Warn(ctx, "user_id is required")
+		return nil, xerr.ErrInvalidParams.WithMessage("user_id is required")
+	}
 
-	if req.DeviceId != "" {
-		// 获取指定设备的会话
-		session, err := s.redis.GetSession(ctx, req.UserId, req.DeviceId)
-		if err != nil {
-			if errors.Is(err, redis.ErrSessionNotFound) {
-				return &sessionpb.GetSessionsResp{
-					Code:    xerr.OK.Code(),
-					Message: xerr.OK.Error(),
-					Data: &sessionpb.GetSessionsData{
-						Sessions: []*sessionpb.Session{},
-					},
-				}, nil
-			}
-			log.Error(ctx, "get session failed",
-				log.String("err", err.Error()),
-				log.String("user_id", req.UserId),
-				log.String("device_id", req.DeviceId),
-			)
-			return &sessionpb.GetSessionsResp{
-				Code:    xerr.ErrInternalServer.Code(),
-				Message: xerr.ErrInternalServer.Error(),
-			}, nil
-		}
-		sessions = []*sessionpb.Session{session}
-	} else {
-		// 获取用户所有设备的会话
-		sessions, err = s.redis.GetSessionsByUserID(ctx, req.UserId)
+	deviceIDs := req.GetDeviceId()
+
+	// 如果没有指定 device_id，获取该用户所有设备的会话
+	if len(deviceIDs) == 0 {
+		sessions, err := s.redis.GetSessionsByUserID(ctx, req.UserId)
 		if err != nil {
 			log.Error(ctx, "get sessions by user id failed",
 				log.String("err", err.Error()),
 				log.String("user_id", req.UserId),
 			)
-			return &sessionpb.GetSessionsResp{
-				Code:    xerr.ErrInternalServer.Code(),
-				Message: xerr.ErrInternalServer.Error(),
-			}, nil
+			return nil, xerr.ErrInternalServer
 		}
+		return &sessionpb.GetSessionsData{
+			Sessions: sessions,
+		}, nil
 	}
 
-	return &sessionpb.GetSessionsResp{
-		Code:    xerr.OK.Code(),
-		Message: xerr.OK.Error(),
-		Data: &sessionpb.GetSessionsData{
-			Sessions: sessions,
-		},
+	// 获取指定设备的会话
+	sessions := make([]*sessionpb.Session, 0, len(deviceIDs))
+	for _, deviceID := range deviceIDs {
+		if deviceID == "" {
+			log.Warn(ctx, "empty device_id in list, skipping",
+				log.String("user_id", req.UserId),
+			)
+			continue
+		}
+
+		session, err := s.redis.GetSession(ctx, req.UserId, deviceID)
+		if err != nil {
+			if errors.Is(err, redis.ErrSessionNotFound) {
+				// 会话不存在，跳过（不返回错误，允许部分设备不存在）
+				log.Debug(ctx, "session not found",
+					log.String("user_id", req.UserId),
+					log.String("device_id", deviceID),
+				)
+				continue
+			}
+			log.Error(ctx, "get session failed",
+				log.String("err", err.Error()),
+				log.String("user_id", req.UserId),
+				log.String("device_id", deviceID),
+			)
+			// 如果获取失败，仍然返回已获取到的会话（部分成功）
+			// 但记录错误日志
+			continue
+		}
+		sessions = append(sessions, session)
+	}
+
+	return &sessionpb.GetSessionsData{
+		Sessions: sessions,
 	}, nil
 }
 
 // Kick 踢掉用户会话
-func (s *SessionService) Kick(ctx context.Context, req *sessionpb.KickReq) (*sessionpb.KickResp, error) {
+func (s *SessionService) Kick(ctx context.Context, req *sessionpb.KickReq) *xerr.Error {
 	var err error
 	if req.DeviceId != "" {
 		// 踢掉指定设备的会话
@@ -147,20 +133,14 @@ func (s *SessionService) Kick(ctx context.Context, req *sessionpb.KickReq) (*ses
 		if err != nil {
 			if errors.Is(err, redis.ErrSessionNotFound) {
 				// 会话不存在，返回成功（幂等性）
-				return &sessionpb.KickResp{
-					Code:    xerr.OK.Code(),
-					Message: xerr.OK.Error(),
-				}, nil
+				return nil
 			}
 			log.Error(ctx, "delete session failed",
 				log.String("err", err.Error()),
 				log.String("user_id", req.UserId),
 				log.String("device_id", req.DeviceId),
 			)
-			return &sessionpb.KickResp{
-				Code:    xerr.ErrInternalServer.Code(),
-				Message: xerr.ErrInternalServer.Error(),
-			}, nil
+			return xerr.ErrInternalServer
 		}
 
 		log.Info(ctx, "session kicked",
@@ -176,10 +156,7 @@ func (s *SessionService) Kick(ctx context.Context, req *sessionpb.KickReq) (*ses
 				log.String("err", err.Error()),
 				log.String("user_id", req.UserId),
 			)
-			return &sessionpb.KickResp{
-				Code:    xerr.ErrInternalServer.Code(),
-				Message: xerr.ErrInternalServer.Error(),
-			}, nil
+			return xerr.ErrInternalServer
 		}
 
 		log.Info(ctx, "all sessions kicked",
@@ -192,14 +169,11 @@ func (s *SessionService) Kick(ctx context.Context, req *sessionpb.KickReq) (*ses
 	// 这里需要调用 Gateway 的 CloseConn 方法
 	// 可以通过消息队列或者直接调用 Gateway 服务
 
-	return &sessionpb.KickResp{
-		Code:    xerr.OK.Code(),
-		Message: xerr.OK.Error(),
-	}, nil
+	return nil
 }
 
 // RefreshSessionTTL 刷新Session TTL
-func (s *SessionService) RefreshSessionTTL(ctx context.Context, req *sessionpb.RefreshSessionTTLReq) (*sessionpb.RefreshSessionTTLResp, error) {
+func (s *SessionService) RefreshSessionTTL(ctx context.Context, req *sessionpb.RefreshSessionTTLReq) *xerr.Error {
 	// 使用Lua脚本刷新Session TTL（保证原子性）
 	err := s.redis.RefreshSessionTTL(ctx, req.UserId, req.DeviceId, req.LastActiveAt)
 	if err != nil {
@@ -208,10 +182,7 @@ func (s *SessionService) RefreshSessionTTL(ctx context.Context, req *sessionpb.R
 				log.String("user_id", req.UserId),
 				log.String("device_id", req.DeviceId),
 			)
-			return &sessionpb.RefreshSessionTTLResp{
-				Code:    xerr.ErrNotFound.Code(),
-				Message: xerr.ErrNotFound.Error(),
-			}, nil
+			return xerr.ErrSessionNotFound
 		}
 
 		log.Error(ctx, "refresh session TTL failed",
@@ -219,10 +190,7 @@ func (s *SessionService) RefreshSessionTTL(ctx context.Context, req *sessionpb.R
 			log.String("user_id", req.UserId),
 			log.String("device_id", req.DeviceId),
 		)
-		return &sessionpb.RefreshSessionTTLResp{
-			Code:    xerr.ErrInternalServer.Code(),
-			Message: xerr.ErrInternalServer.Error(),
-		}, nil
+		return xerr.ErrInternalServer
 	}
 
 	log.Debug(ctx, "session TTL refreshed",
@@ -231,8 +199,85 @@ func (s *SessionService) RefreshSessionTTL(ctx context.Context, req *sessionpb.R
 		log.Int64("last_active_at", req.LastActiveAt),
 	)
 
-	return &sessionpb.RefreshSessionTTLResp{
-		Code:    xerr.OK.Code(),
-		Message: xerr.OK.Error(),
-	}, nil
+	return nil
+}
+
+// DelSession 删除用户会话
+func (s *SessionService) DelSession(ctx context.Context, req *sessionpb.DelSessionReq) *xerr.Error {
+	deviceIDs := req.GetDeviceId()
+
+	// 如果没有指定 device_id，删除该用户所有会话
+	if len(deviceIDs) == 0 {
+		err := s.redis.DeleteSessionsByUserID(ctx, req.UserId)
+		if err != nil {
+			log.Error(ctx, "delete sessions by user id failed",
+				log.String("err", err.Error()),
+				log.String("user_id", req.UserId),
+			)
+			return xerr.ErrInternalServer
+		}
+
+		log.Info(ctx, "all sessions deleted",
+			log.String("user_id", req.UserId),
+			log.String("reason", req.Reason),
+		)
+		return nil
+	}
+
+	// 删除指定设备的会话
+	var deletedCount int
+	var lastErr error
+	for _, deviceID := range deviceIDs {
+		if deviceID == "" {
+			log.Warn(ctx, "empty device_id in list, skipping",
+				log.String("user_id", req.UserId),
+			)
+			continue
+		}
+
+		err := s.redis.DeleteSession(ctx, req.UserId, deviceID)
+		if err != nil {
+			if errors.Is(err, redis.ErrSessionNotFound) {
+				// 会话不存在，记录日志但继续处理（幂等性）
+				log.Debug(ctx, "session not found, already deleted",
+					log.String("user_id", req.UserId),
+					log.String("device_id", deviceID),
+				)
+				deletedCount++ // 视为成功（幂等性）
+				continue
+			}
+			log.Error(ctx, "delete session failed",
+				log.String("err", err.Error()),
+				log.String("user_id", req.UserId),
+				log.String("device_id", deviceID),
+			)
+			lastErr = err
+			continue
+		}
+
+		deletedCount++
+		log.Info(ctx, "session deleted",
+			log.String("user_id", req.UserId),
+			log.String("device_id", deviceID),
+			log.String("reason", req.Reason),
+		)
+	}
+
+	// 如果所有删除都失败，返回错误
+	if deletedCount == 0 && lastErr != nil {
+		return xerr.ErrInternalServer.WithMessage(lastErr.Error())
+	}
+
+	// 至少部分成功
+	if deletedCount < len(deviceIDs) && lastErr != nil {
+		log.Warn(ctx, "some sessions deletion failed",
+			log.String("user_id", req.UserId),
+			log.Int("total", len(deviceIDs)),
+			log.Int("deleted", deletedCount),
+			log.String("last_error", lastErr.Error()),
+		)
+		// 仍然返回成功，因为至少部分删除成功
+	}
+
+	return nil
 }
