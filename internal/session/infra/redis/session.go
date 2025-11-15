@@ -27,28 +27,25 @@ const (
 	sessionExpire = 200 * time.Second
 )
 
-// StoreSession 存储Session
+// StoreSession 存储Session（使用Lua脚本保证原子性）
 func (i *Instance) StoreSession(ctx context.Context, session *sessionpb.Session) error {
 	raw, err := json.Marshal(session)
 	if err != nil {
 		return fmt.Errorf("marshal session failed: %w", err)
 	}
 
-	// 存储会话数据
 	sessionKey := buildUserSessionKey(session.GetUserId(), session.GetDeviceId())
-	if err := i.redis.Set(ctx, sessionKey, string(raw), sessionExpire).Err(); err != nil {
-		return fmt.Errorf("set session failed: %w", err)
-	}
-
-	// 将 device_id 添加到用户会话集合中
 	setKey := buildUserSessionsSetKey(session.GetUserId())
-	if err := i.redis.SAdd(ctx, setKey, session.GetDeviceId()).Err(); err != nil {
-		return fmt.Errorf("add device to sessions set failed: %w", err)
-	}
+	expireSeconds := int64(sessionExpire.Seconds())
 
-	// 设置集合过期时间
-	if err := i.redis.Expire(ctx, setKey, sessionExpire).Err(); err != nil {
-		return fmt.Errorf("expire sessions set failed: %w", err)
+	// 使用Lua脚本原子性地存储session和添加到集合
+	_, err = i.storeSessionLuaScript.Run(ctx, i.redis, []string{sessionKey, setKey},
+		string(raw),
+		session.GetDeviceId(),
+		fmt.Sprintf("%d", expireSeconds),
+	).Result()
+	if err != nil {
+		return fmt.Errorf("store session failed: %w", err)
 	}
 
 	return nil
@@ -74,80 +71,76 @@ func (i *Instance) GetSession(ctx context.Context, userID, deviceID string) (*se
 	return &session, nil
 }
 
-// GetSessionsByUserID 获取用户所有会话
+// GetSessionsByUserID 获取用户所有会话（使用Lua脚本保证原子性）
 func (i *Instance) GetSessionsByUserID(ctx context.Context, userID string) ([]*sessionpb.Session, error) {
-	// 从集合中获取所有 device_id
 	setKey := buildUserSessionsSetKey(userID)
-	deviceIDs, err := i.redis.SMembers(ctx, setKey).Result()
+
+	// 使用Lua脚本原子性地获取所有会话并清理过期数据
+	result, err := i.getSessionsByUserIDLuaScript.Run(ctx, i.redis, []string{setKey}, userID).Result()
 	if err != nil {
-		return nil, fmt.Errorf("get device ids failed: %w", err)
+		return nil, fmt.Errorf("get sessions by user id failed: %w", err)
 	}
 
-	if len(deviceIDs) == 0 {
+	// 解析结果
+	resultSlice, ok := result.([]interface{})
+	if !ok {
 		return []*sessionpb.Session{}, nil
 	}
 
-	// 批量获取所有会话
-	sessions := make([]*sessionpb.Session, 0, len(deviceIDs))
-	for _, deviceID := range deviceIDs {
-		session, err := i.GetSession(ctx, userID, deviceID)
-		if err != nil {
-			if errors.Is(err, ErrSessionNotFound) {
-				// 会话已过期，从集合中移除
-				i.redis.SRem(ctx, setKey, deviceID)
-				continue
-			}
-			return nil, err
+	if len(resultSlice) == 0 {
+		return []*sessionpb.Session{}, nil
+	}
+
+	// 反序列化所有session
+	sessions := make([]*sessionpb.Session, 0, len(resultSlice))
+	for _, item := range resultSlice {
+		sessionData, ok := item.(string)
+		if !ok {
+			continue
 		}
-		sessions = append(sessions, session)
+
+		var session sessionpb.Session
+		if err := json.Unmarshal([]byte(sessionData), &session); err != nil {
+			log.Warn(ctx, "unmarshal session failed",
+				log.String("user_id", userID),
+				log.String("error", err.Error()),
+			)
+			continue
+		}
+		sessions = append(sessions, &session)
 	}
 
 	return sessions, nil
 }
 
-// DeleteSession 删除会话
+// DeleteSession 删除会话（使用Lua脚本保证原子性）
 func (i *Instance) DeleteSession(ctx context.Context, userID, deviceID string) error {
 	sessionKey := buildUserSessionKey(userID, deviceID)
+	setKey := buildUserSessionsSetKey(userID)
 
-	// 删除会话数据
-	if err := i.redis.Del(ctx, sessionKey).Err(); err != nil {
+	// 使用Lua脚本原子性地删除session和从集合移除
+	result, err := i.deleteSessionLuaScript.Run(ctx, i.redis, []string{sessionKey, setKey}, deviceID).Result()
+	if err != nil {
 		return fmt.Errorf("delete session failed: %w", err)
 	}
 
-	// 从用户会话集合中移除 device_id
-	setKey := buildUserSessionsSetKey(userID)
-	if err := i.redis.SRem(ctx, setKey, deviceID).Err(); err != nil {
-		return fmt.Errorf("remove device from sessions set failed: %w", err)
+	// 检查结果（1表示成功，0表示session不存在）
+	resultInt := result.(int64)
+	if resultInt == 0 {
+		return ErrSessionNotFound
 	}
 
 	return nil
 }
 
-// DeleteSessionsByUserID 删除用户所有会话
+// DeleteSessionsByUserID 删除用户所有会话（使用Lua脚本保证原子性）
 func (i *Instance) DeleteSessionsByUserID(ctx context.Context, userID string) error {
-	// 获取所有 device_id
 	setKey := buildUserSessionsSetKey(userID)
-	deviceIDs, err := i.redis.SMembers(ctx, setKey).Result()
+
+	// 使用Lua脚本原子性地删除所有session和集合
+	_, err := i.deleteSessionsByUserIDLuaScript.Run(ctx, i.redis, []string{setKey}, userID).Result()
 	if err != nil {
-		return fmt.Errorf("get device ids failed: %w", err)
-	}
-
-	// 删除所有会话
-	for _, deviceID := range deviceIDs {
-		if err := i.DeleteSession(ctx, userID, deviceID); err != nil {
-			log.Error(ctx,
-				"delete session failed",
-				log.Any("user", userID),
-				log.Any("device", deviceID),
-				log.String("err", err.Error()),
-			)
-			continue
-		}
-	}
-
-	// 删除集合
-	if err := i.redis.Del(ctx, setKey).Err(); err != nil {
-		return fmt.Errorf("delete sessions set failed: %w", err)
+		return fmt.Errorf("delete sessions by user id failed: %w", err)
 	}
 
 	return nil

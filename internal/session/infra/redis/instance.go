@@ -6,8 +6,12 @@ import (
 )
 
 type Instance struct {
-	redis                      *redis.Client
-	refreshSessionTTLLuaScript *redis.Script
+	redis                          *redis.Client
+	refreshSessionTTLLuaScript     *redis.Script
+	storeSessionLuaScript          *redis.Script
+	getSessionsByUserIDLuaScript   *redis.Script
+	deleteSessionLuaScript         *redis.Script
+	deleteSessionsByUserIDLuaScript *redis.Script
 }
 
 // NewInstance 创建 Redis 实例
@@ -31,7 +35,11 @@ func NewInstance() *Instance {
 		MinIdleConns: minIdleConns,
 	})
 	return &Instance{
-		redis:                      cli,
-		refreshSessionTTLLuaScript: redis.NewScript(refreshSessionTTLLuaScript),
+		redis:                          cli,
+		refreshSessionTTLLuaScript:     redis.NewScript(refreshSessionTTLLuaScript),
+		storeSessionLuaScript:          redis.NewScript(storeSessionLuaScript),
+		getSessionsByUserIDLuaScript:   redis.NewScript(getSessionsByUserIDLuaScript),
+		deleteSessionLuaScript:         redis.NewScript(deleteSessionLuaScript),
+		deleteSessionsByUserIDLuaScript: redis.NewScript(deleteSessionsByUserIDLuaScript),
 	}
 }
