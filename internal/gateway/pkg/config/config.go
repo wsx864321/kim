@@ -20,15 +20,6 @@ func GetGatewayServiceName() string {
 	return name
 }
 
-// GetGatewayServiceIP 获取 Gateway 服务 IP 地址
-func GetGatewayServiceIP() string {
-	ip := viper.GetString("gateway.ip")
-	if ip == "" {
-		return "127.0.0.1"
-	}
-	return ip
-}
-
 // GetGatewayServicePort 获取 Gateway 服务端口（gRPC端口）
 func GetGatewayServicePort() int {
 	port := viper.GetInt("gateway.port")

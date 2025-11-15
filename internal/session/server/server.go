@@ -8,6 +8,8 @@ import (
 	"github.com/wsx864321/kim/internal/session/logic"
 	"github.com/wsx864321/kim/internal/session/pkg/config"
 	"github.com/wsx864321/kim/pkg/krpc"
+	"github.com/wsx864321/kim/pkg/krpc/registry"
+	"github.com/wsx864321/kim/pkg/krpc/registry/etcd"
 	"github.com/wsx864321/kim/pkg/log"
 	"google.golang.org/grpc"
 )
@@ -26,8 +28,8 @@ func Run(configPath string) {
 
 	s := krpc.NewPServer(
 		krpc.WithServiceName(config.GetSessionServiceName()),
-		krpc.WithIP(config.GetSessionServiceIP()),
 		krpc.WithPort(config.GetSessionServicePort()),
+		krpc.WithRegistry(createEtcdRegistry()),
 	)
 
 	// 注册 Session 服务
@@ -46,4 +48,14 @@ func createSessionHandler() *handler.SessionHandler {
 			redis.NewInstance(),
 		),
 	)
+}
+
+// createEtcdRegistry 创建 Etcd 注册中心
+func createEtcdRegistry() registry.Registrar {
+	r, err := etcd.NewETCDRegister(etcd.WithEndpoints(config.GetRegistryEndpoints()))
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }

@@ -52,7 +52,6 @@ func Run(configPath string) {
 	// 创建gRPC服务器
 	grpcServer := krpc.NewPServer(
 		krpc.WithServiceName(config.GetGatewayServiceName()),
-		krpc.WithIP(config.GetGatewayServiceIP()),
 		krpc.WithPort(config.GetGatewayServicePort()),
 	)
 
@@ -63,7 +62,6 @@ func Run(configPath string) {
 
 	log.Info(ctx, "gateway server starting",
 		log.String("service_name", config.GetGatewayServiceName()),
-		log.String("ip", config.GetGatewayServiceIP()),
 		log.Int("grpc_port", config.GetGatewayServicePort()),
 		log.Int("tcp_port", config.GetGatewayTCPPort()),
 		log.String("gateway_id", config.GetGatewayID()),

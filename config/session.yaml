@@ -12,9 +12,6 @@ session:
   # 服务名称
   service_name: "kim-session"
   
-  # 服务 IP 地址
-  ip: "127.0.0.1"
-  
   # 服务端口
   port: 9001
   
@@ -50,7 +47,7 @@ registry:
   type: "etcd"
   # 注册中心端点列表
   endpoints:
-    - "127.0.0.1:2379"
+    - "127.0.0.1:2371"
   # 连接超时时间 (秒)
   timeout: 5
 

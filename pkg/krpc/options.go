@@ -7,7 +7,6 @@ import (
 
 type serverOptions struct {
 	serviceName string
-	ip          string
 	port        int
 	weight      int
 	registry    registry.Registrar
@@ -29,13 +28,6 @@ type ClientOption func(opts *clientOptions)
 func WithServiceName(serviceName string) ServerOption {
 	return func(opts *serverOptions) {
 		opts.serviceName = serviceName
-	}
-}
-
-// WithIP set ip
-func WithIP(ip string) ServerOption {
-	return func(opts *serverOptions) {
-		opts.ip = ip
 	}
 }
 

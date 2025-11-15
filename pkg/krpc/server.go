@@ -5,6 +5,7 @@ import (
 	"fmt"
 	serverinterceptor "github.com/wsx864321/kim/pkg/krpc/interceptor/server"
 	"github.com/wsx864321/kim/pkg/krpc/registry"
+	"github.com/wsx864321/kim/pkg/krpc/util"
 	"github.com/wsx864321/kim/pkg/log"
 	"google.golang.org/grpc"
 	"net"
@@ -69,7 +70,7 @@ func (p *KServer) Start(ctx context.Context) {
 		register(s)
 	}
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", p.ip, p.port))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", p.port))
 	if err != nil {
 		panic(err)
 	}
@@ -86,7 +87,7 @@ func (p *KServer) Start(ctx context.Context) {
 		Endpoints: []*registry.Endpoint{
 			{
 				ServerName: p.serviceName,
-				IP:         p.ip,
+				IP:         util.ExternalIP(),
 				Port:       p.port,
 				Weight:     p.weight,
 				Enable:     true,
@@ -95,7 +96,6 @@ func (p *KServer) Start(ctx context.Context) {
 	}
 	if p.registry != nil {
 		p.registry.Register(ctx, &service)
-		log.Info(context.Background(), "register service success", log.Any("service", service))
 	}
 
 	log.Info(context.Background(), "start PRCP success", log.Any("service", p.serviceName))

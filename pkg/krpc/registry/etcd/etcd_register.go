@@ -119,6 +119,9 @@ func (r *Register) registerServiceOrKeepAlive(ctx context.Context) {
 }
 
 func (r *Register) registerService(ctx context.Context, service *registerService) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
 	leaseGrantResp, err := r.cli.Grant(ctx, r.keepAliveInterval)
 	if err != nil {
 		log.Error(
@@ -133,21 +136,26 @@ func (r *Register) registerService(ctx context.Context, service *registerService
 		key := r.getEtcdRegisterKey(service.service.Name, endpoint.IP, endpoint.Port)
 		raw, err := json.Marshal(endpoint)
 		if err != nil {
-			//log.CtxErrorf(ctx, "register service err,err:%v, register data:%v", err, string(raw))
 			continue
 		}
 
 		_, err = r.cli.Put(ctx, key, string(raw), clientv3.WithLease(leaseGrantResp.ID))
 		if err != nil {
-			//log.CtxErrorf(ctx, "register service err,err:%v, register data:%v", err, string(raw))
+			log.Error(ctx,
+				"register service put err",
+				log.String("key", key),
+				log.String("value", string(raw)),
+				log.String("err", err.Error()),
+			)
 			continue
 		}
 
+		log.Info(ctx, "register service success", log.String("key", key), log.String("value", string(raw)))
 	}
 
 	keepAliveCh, err := r.cli.KeepAlive(ctx, leaseGrantResp.ID)
 	if err != nil {
-		//log.CtxErrorf(ctx, "register service keepalive,err:%v", err)
+		log.Info(ctx, "register service keep alive err", log.String("err", err.Error()))
 		return
 	}
 
@@ -164,7 +172,7 @@ func (r *Register) unRegisterService(ctx context.Context, service *registry.Serv
 			if endpoint.IP == unRegisterEndpoint.IP && endpoint.Port == unRegisterEndpoint.Port {
 				_, err := r.cli.Delete(context.TODO(), r.getEtcdRegisterKey(service.Name, endpoint.IP, endpoint.Port))
 				if err != nil {
-					//log.CtxErrorf(ctx, "UnRegisterService etcd del err, service %v was not registered", service.Name)
+					log.Error(ctx, "unregister service delete err", log.String("err", err.Error()))
 				}
 				isRemove = true
 				break
@@ -224,6 +232,12 @@ func (r *Register) GetService(ctx context.Context, name string) *registry.Servic
 	// 防止并发获取service导致cache中的数据混乱
 	r.lock.Lock()
 	defer r.lock.Unlock()
+
+	// double check
+	allServices = r.getDownServices()
+	if val, ok := allServices[name]; ok {
+		return val
+	}
 
 	key := r.getEtcdRegisterPrefixKey(name)
 	getResp, _ := r.cli.Get(ctx, key, clientv3.WithPrefix())

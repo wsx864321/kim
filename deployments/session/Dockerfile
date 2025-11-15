@@ -4,8 +4,8 @@ FROM golang:1.24-alpine AS builder
 # 设置工作目录
 WORKDIR /build
 
-# 安装必要的构建工具
-RUN apk add --no-cache git make
+# 设置 Go 模块代理
+ENV GOPROXY=https://goproxy.cn,direct
 
 # 复制 go mod 文件（利用 Docker 缓存层）
 COPY go.mod go.sum ./
@@ -24,9 +24,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 
 # 运行阶段
 FROM alpine:latest
-
-# 安装必要的运行时依赖
-RUN apk --no-cache add ca-certificates tzdata netcat-openbsd
 
 # 设置时区
 ENV TZ=Asia/Shanghai

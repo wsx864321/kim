@@ -15,11 +15,6 @@ func GetSessionServiceName() string {
 	return viper.GetString("session.service_name")
 }
 
-// GetSessionServiceIP 获取 Session 服务 IP 地址
-func GetSessionServiceIP() string {
-	return viper.GetString("session.ip")
-}
-
 // GetSessionServicePort 获取 Session 服务端口
 func GetSessionServicePort() int {
 	return viper.GetInt("session.port")
@@ -84,4 +79,9 @@ func GetLogFilename() string {
 // GetJWTSecretKey 获取 JWT 密钥
 func GetJWTSecretKey() string {
 	return viper.GetString("session.jwt.secret_key")
+}
+
+// GetRegistryEndpoints 获取注册中心端点列表
+func GetRegistryEndpoints() []string {
+	return viper.GetStringSlice("registry.endpoints")
 }
