@@ -23,7 +23,7 @@ const (
 	// 用于存储用户的所有 device_id，方便快速查询
 	userSessionsSetKey = "kim:user:sessions:{%s}"
 
-	// sessionExpire 会话过期时间，7 天
+	// sessionExpire 会话过期时间，200 秒
 	sessionExpire = 200 * time.Second
 )
 

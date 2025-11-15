@@ -97,3 +97,8 @@ func GetLogFilename() string {
 	return filename
 }
 
+// GetRegistryEndpoints 获取注册中心端点列表
+func GetRegistryEndpoints() []string {
+	return viper.GetStringSlice("registry.endpoints")
+}
+

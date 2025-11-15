@@ -14,7 +14,7 @@ const (
 	PlatformTypeWeb                  // iOS端
 	PlatformTypePC                   // android端
 	PlatformTypePAD                  // PC端
-	PlatformTypeBot                  // 鸿蒙端
+	PlatformTypeBot                  // 机器人、第三方接入
 )
 
 type connection struct {

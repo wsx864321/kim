@@ -11,6 +11,8 @@ import (
 	"github.com/wsx864321/kim/internal/gateway/handler"
 	"github.com/wsx864321/kim/internal/gateway/pkg/config"
 	"github.com/wsx864321/kim/pkg/krpc"
+	"github.com/wsx864321/kim/pkg/krpc/registry"
+	"github.com/wsx864321/kim/pkg/krpc/registry/etcd"
 	"github.com/wsx864321/kim/pkg/log"
 	"google.golang.org/grpc"
 )
@@ -53,10 +55,11 @@ func Run(configPath string) {
 
 	log.Info(ctx, "tcp transport started", log.Int("port", config.GetGatewayTCPPort()))
 
-	// 创建gRPC服务器
+	// 创建gRPC服务器，并注册到服务发现
 	grpcServer := krpc.NewPServer(
 		krpc.WithServiceName(config.GetGatewayServiceName()),
 		krpc.WithPort(config.GetGatewayServicePort()),
+		krpc.WithRegistry(createEtcdRegistry()),
 	)
 
 	// 注册Gateway gRPC服务
@@ -94,4 +97,15 @@ func createTCPTransport() (conn.Transport, error) {
 	}
 
 	return conn.NewTCPTransport(tcpPort, opts...)
+}
+
+// createEtcdRegistry 创建 Etcd 注册中心
+func createEtcdRegistry() registry.Registrar {
+	r, err := etcd.NewETCDRegister(etcd.WithEndpoints(config.GetRegistryEndpoints()))
+	if err != nil {
+		log.Error(context.Background(), "create etcd registry failed", log.String("error", err.Error()))
+		panic(err)
+	}
+
+	return r
 }
