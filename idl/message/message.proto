@@ -1,0 +1,185 @@
+//protoc --go_out=. --go-grpc_out=. message.proto
+syntax = "proto3";
+
+option go_package = "./;message";
+
+package message;
+
+service MessageService {
+  // SendMessage 发送消息
+  rpc SendMessage (UpstreamRequest) returns (UpstreamResponse);
+}
+
+// MessageType 消息类型
+enum MessageType {
+  MESSAGE_TYPE_UNkNOW = 0; // 未知类型
+  MESSAGE_TYPE_CHAT = 1; // 单聊消息
+  MESSAGE_TYPE_GROUP_CHAT = 2; // 群聊消息
+  MESSAGE_TYPE_READ_RECEIPT = 3; // 已读回执消息
+  MESSAGE_TYPE_RECALL = 4; // 撤回消息
+  MESSAGE_TYPE_DELETE = 5; // 删除消息
+}
+
+// MessageContentType 消息内容类型
+enum MessageElementType {
+  CONTENT_ELEMENT_UNKNOWN = 0; // 未知类型
+  CONTENT_ELEMENT_TEXT = 1; // 文本消息
+  CONTENT_ELEMENT_IMAGE = 2; // 图片消息
+  CONTENT_ELEMENT_VIDEO = 3; // 视频消息
+  CONTENT_ELEMENT_FILE = 4; // 文件消息
+  CONTENT_ELEMENT_AUDIO = 5; // 音频消息
+  CONTENT_ELEMENT_STICKER = 6; // 表情包消息
+  CONTENT_ELEMENT_MENTION = 7; // @提醒元素（独立@元素）
+  CONTENT_ELEMENT_CUSTOM = 8; // 自定义消息
+}
+
+// UpstreamRequest 消息上行请求
+message UpstreamRequest {
+  // msg_type 消息类型（枚举）
+  MessageType msg_type = 1;
+  // payload 消息内容（字节数组）
+  bytes payload = 2;
+}
+
+// UpstreamResponse 消息上行响应
+message UpstreamResponse {
+  // code 响应状态码
+  int32 code = 1;
+  // message 响应消息
+  string message = 2;
+  // UpstreamResult 结果数据
+  UpstreamResult data = 3;
+}
+
+// UpstreamResult 结果数据
+message UpstreamResult {
+  // msg_id 消息ID（客户端生成的msg_id）
+  int64 msg_id = 1;
+}
+
+// Message 消息体
+message Message{
+  // cli_msg_id 客户端消息ID
+  int64 cli_msg_id = 1;
+  // cli_seq_id 客户端消息序列ID
+  int64 cli_seq_id = 2;
+  // sender_id 发送者用户ID
+  int64 sender_id = 3;
+  // receiver_id 接收者用户ID(单聊)
+  int64 receiver_id = 4;
+  // group_id 接收者群ID（群聊）
+  int64 group_id = 5;
+  // conversation_id 会话ID
+  int64 conversation_id = 6;
+  // msg_type 消息类型（枚举）
+  MessageType msg_type = 7;
+  // msg_body 消息内容
+  repeated MessageContent msg_body = 8;
+  // sent_ts 客户端发送时间戳
+  int64 sent_ts = 9;
+  // at_users @的用户ID列表（可选，用于@提醒功能）
+  repeated int64 at_users = 10;
+  // at_all 是否@所有人（群聊时有效，true表示@所有人）
+  bool at_all = 11;
+}
+
+message MessageContent {
+  // element_type 消息内容类型（枚举，用于快速判断和兼容）
+  MessageElementType element_type = 1;
+  // content 消息内容（使用oneof实现类型安全，支持复合消息）
+  oneof content {
+    TextElement text = 2;
+    ImageElement image = 3;
+    VideoElement video = 4;
+    FileElement file_c = 5;
+    AudioElement audio = 6;
+    StickerElement sticker = 7;
+    MentionElement mention = 8; // @提醒元素
+    CustomElement custom = 9;
+  }
+}
+
+// TextElement 文本消息内容
+message TextElement {
+  // text 文本内容
+  string text = 1;
+}
+
+// ImageElement 图片消息内容
+message ImageElement {
+  // url 图片URL
+  string url = 1;
+  // width 图片宽度
+  int32 width = 2;
+  // height 图片高度
+  int32 height = 3;
+  // size 图片大小（字节数）
+  int64 size = 4;
+  // uuid 图片唯一标识符
+  string uuid = 5;
+}
+
+// VideoElement 视频消息内容
+message VideoElement {
+  // url 视频URL
+  string url = 1;
+  // duration 视频时长（秒）
+  int32 duration = 2;
+  // size 视频大小（字节数）
+  int64 size = 3;
+  // uuid 视频唯一标识符
+  string uuid = 4;
+}
+
+// FileElement 文件消息内容
+message FileElement {
+  // url 文件URL
+  string url = 1;
+  // file_name 文件名
+  string file_name = 2;
+  // size 文件大小（字节数）
+  int64 size = 3;
+  // uuid 文件唯一标识符
+  string uuid = 4;
+}
+
+// AudioElement 音频消息内容
+message AudioElement {
+  // url 音频URL
+  string url = 1;
+  // duration 音频时长（秒）
+  int32 duration = 2;
+  // size 音频大小（字节数）
+  int64 size = 3;
+  // uuid 音频唯一标识符
+  string uuid = 4;
+}
+
+// StickerElement 表情包消息内容
+message StickerElement {
+  // sticker_id 表情包ID
+  string sticker_id = 1;
+  // url 表情包URL
+  string url = 2;
+  // size 表情包大小（字节数）
+  int64 size = 3;
+  // uuid 表情包唯一标识符
+  string uuid = 4;
+}
+
+// MentionElement @提醒元素（独立的@元素，用于纯@消息或与其他元素组合）
+message MentionElement {
+  // at_users @的用户ID列表
+  repeated string at_users = 1;
+  // at_all 是否@所有人（群聊时有效）
+  bool at_all = 2;
+  // display_text 显示文本（可选，用于显示@的用户名，如"@张三 @李四"）
+  string display_text = 3;
+}
+
+
+// CustomElement 自定义消息内容
+message CustomElement {
+  // data 自定义数据（字节数组）
+  bytes data = 1;
+}
