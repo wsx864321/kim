@@ -4,6 +4,7 @@ import (
 	"context"
 	sessionpb "github.com/wsx864321/kim/idl/session"
 	"github.com/wsx864321/kim/pkg/krpc"
+	"github.com/wsx864321/kim/pkg/krpc/registry"
 	"github.com/wsx864321/kim/pkg/log"
 )
 
@@ -13,8 +14,11 @@ type Client struct {
 }
 
 // NewClient 创建 Session 客户端
-func NewClient() *Client {
-	cli, err := krpc.NewKClient(krpc.WithClientServiceName("kim-session"))
+func NewClient(r registry.Registrar) *Client {
+	cli, err := krpc.NewKClient(
+		krpc.WithClientServiceName("kim-session"),
+		krpc.WithClientRegistry(r),
+	)
 	if err != nil {
 		log.Error(nil, "create session client failed",
 			log.String("error", err.Error()),

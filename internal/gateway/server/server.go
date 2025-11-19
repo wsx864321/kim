@@ -38,8 +38,11 @@ func Run(configPath string) {
 		panic(err)
 	}
 
+	// 创建Etcd注册中心
+	r := createEtcdRegistry()
+
 	// 创建Session客户端管理器
-	sessionClient := session.NewClient()
+	sessionClient := session.NewClient(r)
 
 	// 创建Handler
 	gatewayHandler := handler.NewGatewayHandler(sessionClient, tcpTransport)
@@ -59,7 +62,7 @@ func Run(configPath string) {
 	grpcServer := krpc.NewPServer(
 		krpc.WithServiceName(config.GetGatewayServiceName()),
 		krpc.WithPort(config.GetGatewayServicePort()),
-		krpc.WithRegistry(createEtcdRegistry()),
+		krpc.WithRegistry(r),
 	)
 
 	// 注册Gateway gRPC服务

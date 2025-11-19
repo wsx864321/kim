@@ -3,9 +3,9 @@ package server
 import (
 	"context"
 	pushpb "github.com/wsx864321/kim/idl/push"
-	"github.com/wsx864321/kim/internal/gateway/infra/grpc/session"
 	"github.com/wsx864321/kim/internal/push/handler"
 	"github.com/wsx864321/kim/internal/push/infra/grpc/gateway"
+	"github.com/wsx864321/kim/internal/push/infra/grpc/session"
 	"github.com/wsx864321/kim/internal/push/logic"
 	"github.com/wsx864321/kim/internal/push/pkg/config"
 	"github.com/wsx864321/kim/pkg/krpc"
@@ -29,14 +29,17 @@ func Run(configPath string) {
 
 	ctx := context.Background()
 
+	// 创建注册中心
+	r := createEtcdRegistry()
+
 	// 创建 Push Handler
-	pushHandler := createPushHandler()
+	pushHandler := createPushHandler(r)
 
 	// 创建 gRPC 服务器
 	grpcServer := krpc.NewPServer(
 		krpc.WithServiceName(config.GetPushServiceName()),
 		krpc.WithPort(config.GetPushServicePort()),
-		krpc.WithRegistry(createEtcdRegistry()),
+		krpc.WithRegistry(r),
 	)
 
 	// 注册 Push gRPC 服务
@@ -54,10 +57,10 @@ func Run(configPath string) {
 }
 
 // createPushHandler 创建 PushHandler 实例
-func createPushHandler() *handler.PushHandler {
+func createPushHandler(r registry.Registrar) *handler.PushHandler {
 	// 创建 Push Service
 	pushService := logic.NewPushService(
-		session.NewClient(),
+		session.NewClient(r),
 		createGatewayManager(),
 	)
 

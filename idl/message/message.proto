@@ -64,9 +64,9 @@ message Message{
   // cli_seq_id 客户端消息序列ID
   int64 cli_seq_id = 2;
   // sender_id 发送者用户ID
-  int64 sender_id = 3;
+  string sender_id = 3;
   // receiver_id 接收者用户ID(单聊)
-  int64 receiver_id = 4;
+  string receiver_id = 4;
   // group_id 接收者群ID（群聊）
   int64 group_id = 5;
   // conversation_id 会话ID
